@@ -543,13 +543,30 @@
   function renderPackTab(body, s) {
     const grid = el('div', { class: 'grid gap-6 lg:grid-cols-2' });
 
+    // pack image field (manages its own DOM so the preview can update live)
+    const packImgBox = el('div');
+    function renderPackImg() {
+      clear(packImgBox);
+      const st = Store.get();
+      if (st.pack.image) {
+        packImgBox.appendChild(el('div', { class: 'relative' }, [
+          el('img', { src: st.pack.image, class: 'h-28 w-full rounded-xl object-contain bg-black/30' }),
+          el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8 !bg-rose-500/80', title: 'Remover imagem', onclick: () => { Store.update((x) => { x.pack.image = ''; }); renderPackImg(); } }, '×'),
+        ]));
+      } else {
+        packImgBox.appendChild(dropzone({ icon: '🎴', label: 'Imagem do pacote (logo/arte)', onImage: (url) => { Store.update((x) => { x.pack.image = url; }); renderPackImg(); } }));
+      }
+    }
+    renderPackImg();
+
     const form = panel('Configuração do Pacotinho', [
       labeled('Nome do pacote', input(s.pack.name, (v) => Store.update((st) => { st.pack.name = v; }))),
       el('div', { class: 'grid grid-cols-2 gap-3' }, [
         labeled('Cor 1', colorInput(s.pack.color1, (v) => Store.update((st) => { st.pack.color1 = v; }))),
         labeled('Cor 2', colorInput(s.pack.color2, (v) => Store.update((st) => { st.pack.color2 = v; }))),
       ]),
-      labeled('Logo / Emoji', logoPicker(s)),
+      labeled('Imagem do pacote', packImgBox),
+      labeled('Logo / Emoji (se não usar imagem)', logoPicker(s)),
       labeled(`Figurinhas por pacote: ${s.pack.perPack}`, slider(s)),
       el('p', { class: 'text-xs text-slate-400' }, 'Dica: pacotes com mais figurinhas completam o álbum mais rápido, mas tornam o jogo menos desafiador.'),
     ]);
@@ -576,13 +593,10 @@
   }
 
   function packVisual(pack) {
-    return el('div', {
-      class: 'pack3d animate-floaty',
-      style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}`,
-    }, [
-      el('div', { class: 'pack3d__strip' }),
-      el('div', { class: 'pack3d__logo' }, pack.logo),
-    ]);
+    const layers = [el('div', { class: 'pack3d__strip' })];
+    if (pack.image) layers.push(el('div', { class: 'pack3d__img', style: `background-image:url('${pack.image}')` }));
+    layers.push(el('div', { class: 'pack3d__logo' }, pack.image ? '' : pack.logo));
+    return el('div', { class: 'pack3d animate-floaty', style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}` }, layers);
   }
 
   function logoPicker(s) {

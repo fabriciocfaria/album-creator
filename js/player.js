@@ -113,10 +113,10 @@
   }
 
   function packVisual(pack) {
-    return el('div', {
-      class: 'pack3d animate-floaty',
-      style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}`,
-    }, [el('div', { class: 'pack3d__strip' }), el('div', { class: 'pack3d__logo' }, pack.logo)]);
+    const layers = [el('div', { class: 'pack3d__strip' })];
+    if (pack.image) layers.push(el('div', { class: 'pack3d__img', style: `background-image:url('${pack.image}')` }));
+    layers.push(el('div', { class: 'pack3d__logo' }, pack.image ? '' : pack.logo));
+    return el('div', { class: 'pack3d animate-floaty', style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}` }, layers);
   }
 
   function addCoins(n) { Store.update((st) => { st.player.coins += n; }); toast('+' + n + ' 🪙', 'success'); }

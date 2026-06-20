@@ -174,14 +174,34 @@
     document.getElementById('nav-logo').addEventListener('click', () => setMode('menu'));
 
     document.getElementById('btn-save').addEventListener('click', saveAlbum);
+    document.getElementById('btn-export').addEventListener('click', exportAlbum);
+    document.getElementById('btn-import').addEventListener('click', importAlbum);
     document.getElementById('btn-reset').addEventListener('click', () => {
       window.UI.confirm('Reiniciar TODO o projeto? Isso apaga álbum, figurinhas e progresso.', () => {
         Store.reset(); applyTheme(); updateNav(); rerender(); toast('Projeto reiniciado', 'info');
       }, { yes: 'Reiniciar' });
     });
 
-    // save before leaving (covers the debounce window)
+    // save before leaving / when tab is hidden (mobile-friendly)
     window.addEventListener('beforeunload', () => { Store.saveNow(); });
+    window.addEventListener('pagehide', () => { Store.saveNow(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') Store.saveNow(); });
+
+    // warn if the browser is NOT persisting storage (private mode / in-app browser)
+    if (Store.isPersistent() === false) showStorageWarning();
+  }
+
+  function showStorageWarning() {
+    if (document.getElementById('storage-warn')) return;
+    const bar = el('div', { id: 'storage-warn', class: 'glass mx-auto mt-3 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-2xl border-amber-400/40 px-4 py-3 text-sm' }, [
+      el('span', {}, '⚠️ Este navegador não está guardando seus dados (modo privado ou navegador de um app). Ao recarregar, o álbum some. Abra no Chrome/Safari ou use Exportar para salvar um arquivo.'),
+      el('div', { class: 'flex gap-2' }, [
+        el('button', { class: 'btn-secondary !py-2 text-sm', onclick: exportAlbum }, '⬇️ Exportar'),
+        el('button', { class: 'ghost-btn', title: 'Fechar', onclick: () => bar.remove() }, '×'),
+      ]),
+    ]);
+    const header = document.querySelector('header');
+    header.parentNode.insertBefore(bar, header.nextSibling);
   }
 
   window.App = { rerender, setMode, applyTheme, saveAlbum, exportAlbum, importAlbum };

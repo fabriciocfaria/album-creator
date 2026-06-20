@@ -292,8 +292,9 @@ body { background: var(--bg-1); }
   background: linear-gradient(115deg, transparent, rgba(255,255,255,.55), transparent);
   animation: shimmer 3.5s linear infinite;
 }
-.pack3d__logo { position:absolute; inset:0; display:grid; place-items:center; font-size:2.4rem; }
-.pack3d__strip { position:absolute; top:18%; left:0; right:0; height:14px; background: rgba(0,0,0,.25); }
+.pack3d__img { position:absolute; inset:0; z-index:0; background-size:cover; background-position:center; }
+.pack3d__logo { position:absolute; inset:0; z-index:2; display:grid; place-items:center; font-size:2.4rem; }
+.pack3d__strip { position:absolute; top:18%; left:0; right:0; height:14px; background: rgba(0,0,0,.25); z-index:1; }
 
 @keyframes pack-rip { 0%{transform:rotate(0) scale(1);} 30%{transform:rotate(-4deg) scale(1.04);} 100%{transform:rotate(6deg) translateY(-40px) scale(.7); opacity:0;} }
 .pack-rip { animation: pack-rip .8s ease-in forwards; }

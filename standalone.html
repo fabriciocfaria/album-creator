@@ -335,8 +335,9 @@ body { background: var(--bg-1); }
   background: linear-gradient(115deg, transparent, rgba(255,255,255,.55), transparent);
   animation: shimmer 3.5s linear infinite;
 }
-.pack3d__logo { position:absolute; inset:0; display:grid; place-items:center; font-size:2.4rem; }
-.pack3d__strip { position:absolute; top:18%; left:0; right:0; height:14px; background: rgba(0,0,0,.25); }
+.pack3d__img { position:absolute; inset:0; z-index:0; background-size:cover; background-position:center; }
+.pack3d__logo { position:absolute; inset:0; z-index:2; display:grid; place-items:center; font-size:2.4rem; }
+.pack3d__strip { position:absolute; top:18%; left:0; right:0; height:14px; background: rgba(0,0,0,.25); z-index:1; }
 
 @keyframes pack-rip { 0%{transform:rotate(0) scale(1);} 30%{transform:rotate(-4deg) scale(1.04);} 100%{transform:rotate(6deg) translateY(-40px) scale(.7); opacity:0;} }
 .pack-rip { animation: pack-rip .8s ease-in forwards; }
@@ -470,8 +471,10 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       </div>
 
       <div class="flex items-center gap-2">
-        <button id="btn-save"  class="ghost-btn hidden sm:inline-flex" title="Salvar projeto">💾</button>
-        <button id="btn-reset" class="ghost-btn" title="Reiniciar projeto">↺</button>
+        <button id="btn-save"   class="ghost-btn" title="Salvar agora">💾</button>
+        <button id="btn-export" class="ghost-btn" title="Exportar álbum (.json)">⬇️</button>
+        <button id="btn-import" class="ghost-btn" title="Importar álbum (.json)">⬆️</button>
+        <button id="btn-reset"  class="ghost-btn" title="Reiniciar projeto">↺</button>
       </div>
     </nav>
   </header>
@@ -565,18 +568,18 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       req.onerror = () => reject(req.error);
     });
   }
-  function idbGet() {
+  function idbGet(key) {
     return idbOpen().then((db) => new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
-      const r = tx.objectStore(STORE_NAME).get(KEY);
+      const r = tx.objectStore(STORE_NAME).get(key || KEY);
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => reject(r.error);
     }));
   }
-  function idbSet(value) {
+  function idbSet(value, key) {
     return idbOpen().then((db) => new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).put(value, KEY);
+      tx.objectStore(STORE_NAME).put(value, key || KEY);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     }));
@@ -584,20 +587,38 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
 
   let saveTimer = null;
   let lastError = null;
+  let persistent = null;     // null=unknown, true/false after health check
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { saveNow(); }, 200);
+    saveTimer = setTimeout(() => { saveNow(); }, 150);
   }
   function saveNow() {
     const snapshot = state;
     return idbSet(snapshot)
-      .then(() => { lastError = null; })
+      .then(() => { lastError = null; persistent = true; })
       .catch(() => {
         // last-resort fallback (may fail on quota, but better than nothing)
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); lastError = null; }
-        catch (e) { lastError = 'quota'; }
+        catch (e) { lastError = 'quota'; persistent = false; }
       });
   }
+
+  /* write a sentinel and read it back to confirm storage really persists */
+  async function checkPersistence() {
+    const token = 'hc-' + Date.now();
+    try {
+      await idbSet(token, '__health');
+      const back = await idbGet('__health');
+      if (back === token) { persistent = true; return true; }
+    } catch (e) { /* idb failed */ }
+    try {
+      localStorage.setItem('__health', token);
+      if (localStorage.getItem('__health') === token) { persistent = true; return true; }
+    } catch (e) { /* ls failed */ }
+    persistent = false;
+    return false;
+  }
+  function isPersistent() { return persistent; }
 
   /* async initial load — resolves Store.ready */
   const ready = (async function loadInitial() {
@@ -607,6 +628,7 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) loaded = JSON.parse(raw); } catch (e) { /* ignore */ }
     }
     if (loaded && typeof loaded === 'object') state = migrate(loaded);
+    await checkPersistence();
     return state;
   })();
 
@@ -688,7 +710,7 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     STORAGE_KEY, RARITIES, THEMES, ready,
     uid, makeSlot, makePage,
     get, update, reset, subscribe, save, saveNow,
-    exportJSON, importJSON, lastSaveError,
+    exportJSON, importJSON, lastSaveError, isPersistent,
     totalSlots, stickerById, ownedCount, placedCount, isPlaced, duplicates, completion,
   };
 })();
@@ -1990,13 +2012,30 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   function renderPackTab(body, s) {
     const grid = el('div', { class: 'grid gap-6 lg:grid-cols-2' });
 
+    // pack image field (manages its own DOM so the preview can update live)
+    const packImgBox = el('div');
+    function renderPackImg() {
+      clear(packImgBox);
+      const st = Store.get();
+      if (st.pack.image) {
+        packImgBox.appendChild(el('div', { class: 'relative' }, [
+          el('img', { src: st.pack.image, class: 'h-28 w-full rounded-xl object-contain bg-black/30' }),
+          el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8 !bg-rose-500/80', title: 'Remover imagem', onclick: () => { Store.update((x) => { x.pack.image = ''; }); renderPackImg(); } }, '×'),
+        ]));
+      } else {
+        packImgBox.appendChild(dropzone({ icon: '🎴', label: 'Imagem do pacote (logo/arte)', onImage: (url) => { Store.update((x) => { x.pack.image = url; }); renderPackImg(); } }));
+      }
+    }
+    renderPackImg();
+
     const form = panel('Configuração do Pacotinho', [
       labeled('Nome do pacote', input(s.pack.name, (v) => Store.update((st) => { st.pack.name = v; }))),
       el('div', { class: 'grid grid-cols-2 gap-3' }, [
         labeled('Cor 1', colorInput(s.pack.color1, (v) => Store.update((st) => { st.pack.color1 = v; }))),
         labeled('Cor 2', colorInput(s.pack.color2, (v) => Store.update((st) => { st.pack.color2 = v; }))),
       ]),
-      labeled('Logo / Emoji', logoPicker(s)),
+      labeled('Imagem do pacote', packImgBox),
+      labeled('Logo / Emoji (se não usar imagem)', logoPicker(s)),
       labeled(`Figurinhas por pacote: ${s.pack.perPack}`, slider(s)),
       el('p', { class: 'text-xs text-slate-400' }, 'Dica: pacotes com mais figurinhas completam o álbum mais rápido, mas tornam o jogo menos desafiador.'),
     ]);
@@ -2023,13 +2062,10 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   }
 
   function packVisual(pack) {
-    return el('div', {
-      class: 'pack3d animate-floaty',
-      style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}`,
-    }, [
-      el('div', { class: 'pack3d__strip' }),
-      el('div', { class: 'pack3d__logo' }, pack.logo),
-    ]);
+    const layers = [el('div', { class: 'pack3d__strip' })];
+    if (pack.image) layers.push(el('div', { class: 'pack3d__img', style: `background-image:url('${pack.image}')` }));
+    layers.push(el('div', { class: 'pack3d__logo' }, pack.image ? '' : pack.logo));
+    return el('div', { class: 'pack3d animate-floaty', style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}` }, layers);
   }
 
   function logoPicker(s) {
@@ -2213,10 +2249,10 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   }
 
   function packVisual(pack) {
-    return el('div', {
-      class: 'pack3d animate-floaty',
-      style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}`,
-    }, [el('div', { class: 'pack3d__strip' }), el('div', { class: 'pack3d__logo' }, pack.logo)]);
+    const layers = [el('div', { class: 'pack3d__strip' })];
+    if (pack.image) layers.push(el('div', { class: 'pack3d__img', style: `background-image:url('${pack.image}')` }));
+    layers.push(el('div', { class: 'pack3d__logo' }, pack.image ? '' : pack.logo));
+    return el('div', { class: 'pack3d animate-floaty', style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}` }, layers);
   }
 
   function addCoins(n) { Store.update((st) => { st.player.coins += n; }); toast('+' + n + ' 🪙', 'success'); }
@@ -2639,14 +2675,34 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     document.getElementById('nav-logo').addEventListener('click', () => setMode('menu'));
 
     document.getElementById('btn-save').addEventListener('click', saveAlbum);
+    document.getElementById('btn-export').addEventListener('click', exportAlbum);
+    document.getElementById('btn-import').addEventListener('click', importAlbum);
     document.getElementById('btn-reset').addEventListener('click', () => {
       window.UI.confirm('Reiniciar TODO o projeto? Isso apaga álbum, figurinhas e progresso.', () => {
         Store.reset(); applyTheme(); updateNav(); rerender(); toast('Projeto reiniciado', 'info');
       }, { yes: 'Reiniciar' });
     });
 
-    // save before leaving (covers the debounce window)
+    // save before leaving / when tab is hidden (mobile-friendly)
     window.addEventListener('beforeunload', () => { Store.saveNow(); });
+    window.addEventListener('pagehide', () => { Store.saveNow(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') Store.saveNow(); });
+
+    // warn if the browser is NOT persisting storage (private mode / in-app browser)
+    if (Store.isPersistent() === false) showStorageWarning();
+  }
+
+  function showStorageWarning() {
+    if (document.getElementById('storage-warn')) return;
+    const bar = el('div', { id: 'storage-warn', class: 'glass mx-auto mt-3 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-2xl border-amber-400/40 px-4 py-3 text-sm' }, [
+      el('span', {}, '⚠️ Este navegador não está guardando seus dados (modo privado ou navegador de um app). Ao recarregar, o álbum some. Abra no Chrome/Safari ou use Exportar para salvar um arquivo.'),
+      el('div', { class: 'flex gap-2' }, [
+        el('button', { class: 'btn-secondary !py-2 text-sm', onclick: exportAlbum }, '⬇️ Exportar'),
+        el('button', { class: 'ghost-btn', title: 'Fechar', onclick: () => bar.remove() }, '×'),
+      ]),
+    ]);
+    const header = document.querySelector('header');
+    header.parentNode.insertBefore(bar, header.nextSibling);
   }
 
   window.App = { rerender, setMode, applyTheme, saveAlbum, exportAlbum, importAlbum };

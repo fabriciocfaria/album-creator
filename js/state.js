@@ -76,18 +76,18 @@
       req.onerror = () => reject(req.error);
     });
   }
-  function idbGet() {
+  function idbGet(key) {
     return idbOpen().then((db) => new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
-      const r = tx.objectStore(STORE_NAME).get(KEY);
+      const r = tx.objectStore(STORE_NAME).get(key || KEY);
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => reject(r.error);
     }));
   }
-  function idbSet(value) {
+  function idbSet(value, key) {
     return idbOpen().then((db) => new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).put(value, KEY);
+      tx.objectStore(STORE_NAME).put(value, key || KEY);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     }));
@@ -95,20 +95,38 @@
 
   let saveTimer = null;
   let lastError = null;
+  let persistent = null;     // null=unknown, true/false after health check
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { saveNow(); }, 200);
+    saveTimer = setTimeout(() => { saveNow(); }, 150);
   }
   function saveNow() {
     const snapshot = state;
     return idbSet(snapshot)
-      .then(() => { lastError = null; })
+      .then(() => { lastError = null; persistent = true; })
       .catch(() => {
         // last-resort fallback (may fail on quota, but better than nothing)
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); lastError = null; }
-        catch (e) { lastError = 'quota'; }
+        catch (e) { lastError = 'quota'; persistent = false; }
       });
   }
+
+  /* write a sentinel and read it back to confirm storage really persists */
+  async function checkPersistence() {
+    const token = 'hc-' + Date.now();
+    try {
+      await idbSet(token, '__health');
+      const back = await idbGet('__health');
+      if (back === token) { persistent = true; return true; }
+    } catch (e) { /* idb failed */ }
+    try {
+      localStorage.setItem('__health', token);
+      if (localStorage.getItem('__health') === token) { persistent = true; return true; }
+    } catch (e) { /* ls failed */ }
+    persistent = false;
+    return false;
+  }
+  function isPersistent() { return persistent; }
 
   /* async initial load — resolves Store.ready */
   const ready = (async function loadInitial() {
@@ -118,6 +136,7 @@
       try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) loaded = JSON.parse(raw); } catch (e) { /* ignore */ }
     }
     if (loaded && typeof loaded === 'object') state = migrate(loaded);
+    await checkPersistence();
     return state;
   })();
 
@@ -199,7 +218,7 @@
     STORAGE_KEY, RARITIES, THEMES, ready,
     uid, makeSlot, makePage,
     get, update, reset, subscribe, save, saveNow,
-    exportJSON, importJSON, lastSaveError,
+    exportJSON, importJSON, lastSaveError, isPersistent,
     totalSlots, stickerById, ownedCount, placedCount, isPlaced, duplicates, completion,
   };
 })();
