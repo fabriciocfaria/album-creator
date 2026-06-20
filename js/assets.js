@@ -15,6 +15,8 @@
     const bg1 = o.bg1 || '#1e293b';
     const bg2 = o.bg2 || '#020617';
     const num = o.num != null ? o.num : '10';
+    // number color contrasts with the jersey (dark number on light jersey)
+    const numColor = o.numColor || (luminance(jersey) > 0.6 ? '#1f2937' : '#ffffff');
     const svg =
       "<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400' viewBox='0 0 300 400'>" +
       "<defs>" +
@@ -41,9 +43,9 @@
       "<path d='M64 270 L30 312 L56 332 L86 286 Z' fill='url(#js)'/>" +
       "<path d='M236 270 L270 312 L244 332 L214 286 Z' fill='url(#js)'/>" +
       // collar
-      "<path d='M122 196 L150 226 L178 196 Z' fill='#ffffff' opacity='0.85'/>" +
+      "<path d='M122 196 L150 226 L178 196 Z' fill='" + (luminance(jersey) > 0.6 ? '#cbd5e1' : '#ffffff') + "' opacity='0.85'/>" +
       // number
-      "<text x='150' y='325' font-family='Arial, sans-serif' font-size='74' font-weight='bold' fill='#ffffff' text-anchor='middle' opacity='0.92'>" + num + "</text>" +
+      "<text x='150' y='325' font-family='Arial, sans-serif' font-size='74' font-weight='bold' fill='" + numColor + "' text-anchor='middle' opacity='0.95'>" + num + "</text>" +
       "</svg>";
     // encode with double-quote-safe escaping so it works inside CSS url('...')
     return 'data:image/svg+xml,' + encodeURIComponent(svg.replace(/'/g, '"'));
@@ -51,15 +53,28 @@
 
   /* lighten/darken a hex color by pct (-100..100) */
   function shade(hex, pct) {
-    const h = hex.replace('#', '');
-    const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
-    let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const [r0, g0, b0] = toRGB(hex);
     const t = pct < 0 ? 0 : 255, p = Math.abs(pct) / 100;
-    r = Math.round((t - r) * p) + r; g = Math.round((t - g) * p) + g; b = Math.round((t - b) * p) + b;
+    const r = Math.round((t - r0) * p) + r0, g = Math.round((t - g0) * p) + g0, b = Math.round((t - b0) * p) + b0;
     return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
   }
+  function toRGB(hex) {
+    const h = hex.replace('#', '');
+    const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  /* perceived luminance 0..1 */
+  function luminance(hex) {
+    const [r, g, b] = toRGB(hex);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+
+  /* palettes exposed for the customizer UI */
+  const SKINS = ['#ffe0bd', '#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#5c3a21', '#3b2417'];
+  const JERSEYS = ['#ffffff', '#e11d48', '#2563eb', '#16a34a', '#facc15', '#f97316', '#a855f7', '#06b6d4', '#111827', '#ec4899'];
 
   const players = [
+    { name: 'Branco 10', url: avatar({ jersey: '#ffffff', jersey2: '#d1d5db', num: 10, bg1: '#1e293b' }) },
     { name: 'Camisa 10', url: avatar({ jersey: '#e11d48', num: 10, bg1: '#1e293b' }) },
     { name: 'Azul 7', url: avatar({ jersey: '#2563eb', num: 7, bg1: '#0c2340' }) },
     { name: 'Verde 9', url: avatar({ jersey: '#16a34a', skin: '#8d5524', num: 9, bg1: '#052e16' }) },
@@ -70,5 +85,5 @@
     { name: 'Ciano 5', url: avatar({ jersey: '#06b6d4', skin: '#5c3a21', num: 5, bg1: '#083344', hair: '#0d0d0d' }) },
   ];
 
-  window.Assets = { avatar, players, shade };
+  window.Assets = { avatar, players, shade, luminance, SKINS, JERSEYS };
 })();

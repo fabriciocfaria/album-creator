@@ -349,7 +349,10 @@
         }));
       }
       // Model players gallery
-      photoBox.appendChild(el('p', { class: 'mb-1 mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400' }, 'Ou escolha um jogador modelo'));
+      photoBox.appendChild(el('div', { class: 'mb-1 mt-3 flex items-center justify-between' }, [
+        el('p', { class: 'text-[11px] font-semibold uppercase tracking-wide text-slate-400' }, 'Ou escolha um jogador modelo'),
+        el('button', { class: 'btn-secondary !px-2 !py-1 text-[11px]', onclick: () => openModelCustomizer((url) => { d.photo = url; renderPhotoBox(); livePreview(); }) }, '🎨 Customizar'),
+      ]));
       photoBox.appendChild(el('div', { class: 'flex gap-2 overflow-x-auto pb-1' },
         (window.Assets ? window.Assets.players : []).map((p) =>
           el('button', {
@@ -535,6 +538,51 @@
         st.player.owned = {}; st.player.placed = {};
       });
     }, { yes: 'Apagar tudo' });
+  }
+
+  /* Customize a model player avatar: jersey color (incl. white), skin, hair, number */
+  function openModelCustomizer(onApply) {
+    const A = window.Assets;
+    if (!A) return;
+    const cfg = { jersey: '#ffffff', skin: '#f1c27d', num: '10', hair: '#2b2118', bg1: '#1e293b' };
+    const preview = el('img', { class: 'mx-auto h-48 w-36 rounded-xl border border-white/15 object-cover' });
+    const jerseyRow = el('div', { class: 'flex flex-wrap gap-2' });
+    const skinRow = el('div', { class: 'flex flex-wrap gap-2' });
+    const hairRow = el('div', { class: 'flex flex-wrap gap-2' });
+    const build = () => A.avatar({ jersey: cfg.jersey, jersey2: A.shade(cfg.jersey, -25), skin: cfg.skin, num: cfg.num, hair: cfg.hair, bg1: cfg.bg1 });
+    function refresh() { preview.src = build(); }
+    function fillRow(row, colors, key) {
+      clear(row);
+      colors.forEach((c) => row.appendChild(el('button', {
+        class: 'h-8 w-8 rounded-md border-2 ' + (cfg[key] === c ? 'border-fuchsia-400 ring-2 ring-fuchsia-400/40' : 'border-white/20'),
+        style: `background:${c}`, title: c,
+        onclick: () => { cfg[key] = c; fillRow(row, colors, key); refresh(); },
+      })));
+    }
+    fillRow(jerseyRow, A.JERSEYS, 'jersey');
+    fillRow(skinRow, A.SKINS, 'skin');
+    fillRow(hairRow, ['#2b2118', '#0d0d0d', '#5b3a1a', '#8d5524', '#c0a062', '#9ca3af', '#b91c1c'], 'hair');
+
+    const jerseyWheel = el('input', { type: 'color', value: '#ffffff', class: 'h-9 w-12 flex-shrink-0 rounded bg-transparent' });
+    jerseyWheel.addEventListener('input', (e) => { cfg.jersey = e.target.value; fillRow(jerseyRow, A.JERSEYS, 'jersey'); refresh(); });
+    const numInput = el('input', { type: 'number', min: '0', max: '99', value: '10', class: 'field' });
+    numInput.addEventListener('input', (e) => { cfg.num = (e.target.value || '').slice(0, 2); refresh(); });
+
+    refresh();
+    const m = modal([
+      el('h3', { class: 'mb-3 font-display text-lg font-bold' }, '🎨 Customizar jogador modelo'),
+      preview,
+      el('div', { class: 'mt-4 space-y-3' }, [
+        labeled('Cor da camisa', el('div', { class: 'flex items-center gap-2' }, [jerseyWheel, jerseyRow])),
+        labeled('Cor da pele', skinRow),
+        labeled('Cor do cabelo', hairRow),
+        labeled('Número (0–99)', numInput),
+      ]),
+      el('div', { class: 'mt-5 flex justify-end gap-2' }, [
+        el('button', { class: 'btn-secondary', onclick: () => m.close() }, 'Cancelar'),
+        el('button', { class: 'btn-primary', onclick: () => { onApply(build()); m.close(); toast('Jogador aplicado ✓', 'success'); } }, 'Usar figura'),
+      ]),
+    ], { size: 'max-w-md' });
   }
 
   /* ============================================================
