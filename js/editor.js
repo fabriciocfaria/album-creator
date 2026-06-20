@@ -130,19 +130,98 @@
   }
 
   function pageEditor(page, idx, s) {
-    const slots = el('div', { class: 'grid grid-cols-3 gap-2 sm:grid-cols-6' },
-      page.slots.map((slot) => slotPreview(slot)));
+    const isFree = page.layout === 'free' && page.design;
 
-    const head = el('div', { class: 'mb-3 flex items-center justify-between' }, [
+    const head = el('div', { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' }, [
       el('h4', { class: 'font-display font-semibold' }, `Página ${idx + 1}`),
       el('div', { class: 'flex items-center gap-2' }, [
-        el('button', { class: 'ghost-btn', title: 'Remover slot', onclick: () => changeSlots(page.id, -1) }, '－'),
-        el('span', { class: 'text-xs text-slate-400' }, page.slots.length + ' slots'),
-        el('button', { class: 'ghost-btn', title: 'Adicionar slot', onclick: () => changeSlots(page.id, 1) }, '＋'),
+        el('button', { class: 'btn-secondary !px-3 !py-1.5 text-xs', title: 'Editor livre estilo Canva', onclick: () => openPageDesigner(page) }, '✨ Personalizar'),
+        !isFree ? el('button', { class: 'ghost-btn', title: 'Remover slot', onclick: () => changeSlots(page.id, -1) }, '－') : null,
+        !isFree ? el('span', { class: 'text-xs text-slate-400' }, page.slots.length + ' slots') : null,
+        !isFree ? el('button', { class: 'ghost-btn', title: 'Adicionar slot', onclick: () => changeSlots(page.id, 1) }, '＋') : null,
         el('button', { class: 'ghost-btn !text-rose-300', title: 'Excluir página', onclick: () => removePage(page.id) }, '🗑'),
       ]),
     ]);
-    return el('div', { class: 'glass-soft rounded-xl p-4 page-in' }, [head, slots]);
+
+    let bodyNode;
+    if (isFree) {
+      const stage = window.Canvas.renderStatic(page.design, {
+        renderSlot: (elm) => editorFreeSlot(elm, page),
+      });
+      const wrap = el('div', { class: 'relative mx-auto', style: 'aspect-ratio:3/4;max-width:340px' }, [stage,
+        el('button', { class: 'btn-primary absolute bottom-2 right-2 !px-3 !py-1.5 text-xs', onclick: () => openPageDesigner(page) }, '✏ Editar design'),
+      ]);
+      window.UI.bindHolo(wrap);
+      bodyNode = el('div', {}, [
+        el('p', { class: 'mb-2 text-center text-xs text-slate-400' }, 'Toque num slot 🃏 para vincular a figurinha que pertence a ele.'),
+        wrap,
+      ]);
+    } else {
+      bodyNode = el('div', { class: 'grid grid-cols-3 gap-2 sm:grid-cols-6' },
+        page.slots.map((slot) => slotPreview(slot)));
+    }
+    return el('div', { class: 'glass-soft rounded-xl p-4 page-in' }, [head, bodyNode]);
+  }
+
+  /* slot node inside the free (Canva) page preview — used to link a sticker */
+  function editorFreeSlot(elm, page) {
+    const slot = page.slots.find((sl) => sl.id === elm.slotId);
+    const sticker = slot && slot.stickerId ? Store.stickerById(slot.stickerId) : null;
+    if (sticker) {
+      const node = window.Stickers.render(sticker, { showStats: false });
+      const wrap = el('div', { class: 'relative h-full w-full' }, [node,
+        el('button', { class: 'absolute -right-1 -top-1 z-20 grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-xs',
+          onclick: (e) => { e.stopPropagation(); Store.update((st) => { const sl = findSlot(st, elm.slotId); if (sl) sl.stickerId = null; }); } }, '×'),
+      ]);
+      return wrap;
+    }
+    return el('div', { class: 'cv-slot cursor-pointer', onclick: () => assignStickerToSlot(elm.slotId) }, [
+      el('div', { class: 'text-center text-[10px] opacity-80' }, '＋ vincular'),
+    ]);
+  }
+
+  /* open the Canva-like designer for a page */
+  function openPageDesigner(page) {
+    let design = page.design;
+    if (!design) {
+      // seed from current grid slots, laid out in a grid of slot elements
+      design = window.Canvas.blankDesign();
+      design.els.push({ id: Store.uid('el'), type: 'text', x: 8, y: 4, w: 84, h: 12, rot: 0, text: `Página`, color: '#ffffff', font: '"Space Grotesk", sans-serif', weight: '700', size: 9, align: 'center', shadow: true });
+      const n = page.slots.length || 6;
+      const cols = n <= 4 ? 2 : 3;
+      const rows = Math.ceil(n / cols);
+      const cw = 84 / cols, ch = Math.min(26, (78) / rows);
+      page.slots.forEach((sl, i) => {
+        const r = Math.floor(i / cols), c = i % cols;
+        design.els.push({ id: Store.uid('el'), type: 'slot', slotId: sl.id,
+          x: 8 + c * cw + cw * 0.08, y: 18 + r * (ch + 2), w: cw * 0.84, h: ch, rot: 0 });
+      });
+    }
+    window.Canvas.open({
+      design, aspect: '3 / 4', title: 'Personalizar página', allowSlots: true,
+      onSave: (d) => {
+        Store.update((st) => {
+          const p = st.album.pages.find((x) => x.id === page.id); if (!p) return;
+          p.design = d; p.layout = 'free';
+          reconcilePageSlots(p, d);
+        });
+        toast('Página atualizada ✨', 'success');
+        window.App.rerender();
+      },
+    });
+  }
+
+  /* keep page.slots in sync with slot elements present in the design */
+  function reconcilePageSlots(page, design) {
+    const slotEls = design.els.filter((e) => e.type === 'slot');
+    const ids = new Set(slotEls.map((e) => e.slotId));
+    // add missing
+    slotEls.forEach((e) => {
+      if (!page.slots.find((sl) => sl.id === e.slotId)) page.slots.push({ id: e.slotId, stickerId: null });
+    });
+    // remove orphan slots no longer in design
+    page.slots = page.slots.filter((sl) => ids.has(sl.id));
+    if (!page.slots.length) page.slots.push(Store.makeSlot());
   }
 
   function slotPreview(slot) {
@@ -249,7 +328,7 @@
   /* Creator form state (transient draft) */
   let draft = newDraft();
   function newDraft() {
-    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal' };
+    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal', design: null };
   }
 
   function stickerCreator(editing) {
@@ -280,6 +359,32 @@
 
     function bindLive(field) { return (v) => { d[field] = v; livePreview(); }; }
 
+    /* Canva-like custom art designer for the sticker */
+    const artBox = el('div', { class: 'mt-3' });
+    function renderArtBox() {
+      clear(artBox);
+      const has = d.design && d.design.els && d.design.els.length;
+      artBox.appendChild(el('div', { class: 'flex gap-2' }, [
+        el('button', { class: 'btn-primary flex-1 !py-2 text-sm', onclick: openArt }, has ? '✏ Editar arte (Canva)' : '✨ Personalizar arte (Canva)'),
+        has ? el('button', { class: 'btn-secondary !px-3 !py-2 text-sm', title: 'Remover arte custom', onclick: () => { d.design = null; renderArtBox(); livePreview(); } }, '↺') : null,
+      ]));
+      if (has) artBox.appendChild(el('p', { class: 'mt-1 text-center text-[11px] text-emerald-300' }, '🎨 Arte personalizada ativa'));
+    }
+    function openArt() {
+      let design = d.design;
+      if (!design) {
+        design = window.Canvas.blankDesign();
+        if (d.photo) design.els.push({ id: Store.uid('el'), type: 'image', x: 12, y: 8, w: 76, h: 56, rot: 0, src: d.photo, radius: 12 });
+        design.els.push({ id: Store.uid('el'), type: 'text', x: 6, y: 70, w: 88, h: 16, rot: 0, text: d.name || 'NOME', color: '#ffffff', font: '"Space Grotesk", sans-serif', weight: '900', size: 11, align: 'center', shadow: true });
+        if (d.team) design.els.push({ id: Store.uid('el'), type: 'text', x: 6, y: 86, w: 88, h: 8, rot: 0, text: d.team, color: '#e2e8f0', font: 'Inter, sans-serif', weight: '700', size: 6, align: 'center', shadow: true });
+      }
+      window.Canvas.open({
+        design, aspect: '3 / 4', title: 'Arte da figurinha', allowSlots: false,
+        onSave: (dsg) => { d.design = dsg; renderArtBox(); livePreview(); toast('Arte salva 🎨', 'success'); },
+      });
+    }
+    renderArtBox();
+
     const rarityButtons = el('div', { class: 'grid grid-cols-3 gap-2' }, Object.keys(RARITIES).map((key) =>
       el('button', {
         class: 'btn-secondary !px-2 !py-2 text-xs ' + (d.type === key ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
@@ -303,6 +408,7 @@
       el('div', { class: 'mb-4' }, previewWrap),
 
       labeled('Tipo / Raridade', rarityButtons),
+      artBox,
       el('div', { class: 'my-4 border-t border-white/10' }),
 
       el('p', { class: 'mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400' }, '① Foto personalizada'),

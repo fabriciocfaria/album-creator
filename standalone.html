@@ -38,7 +38,7 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Cinzel:wght@600;700;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Cinzel:wght@600;700;900&family=Bebas+Neue&family=Pacifico&family=Righteous&display=swap" rel="stylesheet" />
 
   <style>
 /* ============================================================
@@ -184,6 +184,9 @@ body { background: var(--bg-1); }
   position:absolute; bottom:8px; right:8px; display:flex; gap:.3rem; font-size:.5rem; opacity:.85;
 }
 .sticker__stats span { background: rgba(0,0,0,.5); padding:.1rem .3rem; border-radius:.3rem; }
+
+/* custom Canva design face fills the card */
+.sticker__customface { position:absolute; inset:0; z-index:1; border-radius:inherit; }
 
 /* ---- Rarity: NORMAL ---- */
 .sticker--normal { border-color: rgba(148,163,184,.5); }
@@ -358,6 +361,54 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
 /* helpers */
 .card-grid { display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); }
 .hidden-imp { display:none !important; }
+
+/* ============================================================
+   CANVAS — Editor estilo Canva
+   ============================================================ */
+.cv-stage {
+  position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 14px;
+  container-type: size;
+}
+.cv-el { position: absolute; display: flex; }
+.cv-text { width: 100%; word-break: break-word; }
+.cv-icon { width: 100%; text-align: center; line-height: 1; }
+.cv-shape { width: 100%; height: 100%; }
+.cv-image { width: 100%; height: 100%; background-size: cover; background-position: center; }
+.cv-slot { width: 100%; height: 100%; display: grid; place-items: center; border: 2px dashed rgba(255,255,255,.5); border-radius: 10px; background: rgba(255,255,255,.08); }
+/* make slot contents fill the slot element box */
+.cv-el > .sticker, .cv-el > .slot, .cv-el > .cv-slot, .cv-el > .relative { width:100%; height:100%; }
+.cv-el > .relative > .sticker { position:absolute; inset:0; width:100%; height:100%; }
+
+/* editor overlay */
+.cv-overlay {
+  position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column;
+  background: rgba(2,6,23,.92); backdrop-filter: blur(8px); animation: view-in .2s ease;
+}
+.cv-topbar { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin:.6rem; padding:.5rem .7rem; border-radius:1rem; }
+.cv-addbar { display:flex; gap:.4rem; overflow-x:auto; margin:0 .6rem; padding:.5rem; border-radius:1rem; }
+.cv-add { flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:.1rem; width:60px; padding:.5rem .2rem; border-radius:.7rem; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); transition:all .15s; }
+.cv-add:hover { background:rgba(255,255,255,.16); transform:translateY(-1px); }
+.cv-center { flex:1; display:grid; place-items:center; padding:.8rem; min-height:0; overflow:auto; }
+.cv-canvas-wrap { max-height:100%; max-width:min(100%, 56vh); width:auto; height:100%; box-shadow:0 20px 60px -20px rgba(0,0,0,.9); border-radius:14px; }
+.cv-canvas-wrap .cv-stage { touch-action:none; }
+
+.cv-el--edit { cursor:grab; }
+.cv-el--edit:active { cursor:grabbing; }
+.cv-selected { outline:2px solid var(--accent); outline-offset:2px; }
+.cv-handle { position:absolute; display:grid; place-items:center; width:22px; height:22px; border-radius:50%;
+  background:var(--accent); color:#fff; font-size:.7rem; font-weight:700; box-shadow:0 2px 8px rgba(0,0,0,.5); z-index:5; touch-action:none; }
+.cv-handle--resize { right:-11px; bottom:-11px; cursor:se-resize; }
+.cv-handle--del { right:-11px; top:-11px; background:#ef4444; cursor:pointer; }
+
+.cv-props { margin:.6rem; padding:.7rem .8rem; border-radius:1rem; max-height:38vh; overflow-y:auto; }
+.cv-props-grid { display:grid; grid-template-columns:1fr 1fr; gap:.5rem .7rem; }
+
+.cv-sheet { position:absolute; left:.6rem; right:.6rem; bottom:.6rem; z-index:80; padding:1rem; border-radius:1.2rem; max-height:70vh; overflow-y:auto; }
+@media (min-width: 768px) {
+  .cv-sheet { left:auto; right:1rem; width:380px; }
+}
+
+.btn-secondary.flex-col { flex-direction:column; }
 
 </style>
 </head>
@@ -674,6 +725,373 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
 })();
 
 
+/* ===== js/canvas.js ===== */
+/* ============================================================
+   canvas.js — Editor livre estilo "Canva" (touch-friendly)
+   Trabalha sobre um objeto `design`:
+     design = { bg:{type,color,color1,color2,angle,image}, els:[element] }
+     element = { id,type,x,y,w,h,rot, ...props }   (x/y/w/h em %)
+       type: 'text' | 'icon' | 'shape' | 'image' | 'slot'
+   Exposto como window.Canvas
+     - Canvas.renderStatic(design, opts)  -> nó DOM (não interativo)
+     - Canvas.open({design, aspect, title, allowSlots, onSave})
+     - Canvas.blankDesign()
+   ============================================================ */
+(function () {
+  'use strict';
+  const { el, clear, toast, dropzone, readImage } = window.UI;
+  const Store = window.Store;
+
+  const FONTS = [
+    { v: '"Space Grotesk", sans-serif', n: 'Space Grotesk' },
+    { v: 'Inter, sans-serif', n: 'Inter' },
+    { v: '"Cinzel", serif', n: 'Cinzel' },
+    { v: '"Bebas Neue", sans-serif', n: 'Bebas Neue' },
+    { v: '"Pacifico", cursive', n: 'Pacifico' },
+    { v: '"Righteous", cursive', n: 'Righteous' },
+    { v: 'Georgia, serif', n: 'Serif' },
+    { v: '"Courier New", monospace', n: 'Mono' },
+  ];
+
+  function uid() { return 'el-' + Math.random().toString(36).slice(2, 8); }
+  function blankDesign() {
+    return { bg: { type: 'gradient', color1: '#6d28d9', color2: '#1e1b4b', angle: 150, color: '#111827', image: '' }, els: [] };
+  }
+
+  function bgStyle(bg) {
+    if (!bg) return 'background:#111827';
+    if (bg.type === 'image' && bg.image) return `background-image:url('${bg.image}');background-size:cover;background-position:center`;
+    if (bg.type === 'solid') return `background:${bg.color}`;
+    return `background:linear-gradient(${bg.angle || 150}deg, ${bg.color1}, ${bg.color2})`;
+  }
+
+  /* -------- element -> DOM (shared by editor & static) -------- */
+  function elementNode(elm, ctx) {
+    ctx = ctx || {};
+    const node = el('div', { class: 'cv-el', dataset: { id: elm.id } });
+    node.style.left = elm.x + '%';
+    node.style.top = elm.y + '%';
+    node.style.width = elm.w + '%';
+    node.style.height = elm.h + '%';
+    node.style.transform = `rotate(${elm.rot || 0}deg)`;
+    node.style.opacity = (elm.opacity != null ? elm.opacity : 1);
+
+    if (elm.type === 'text') {
+      const t = el('div', { class: 'cv-text' }, elm.text || 'Texto');
+      t.style.color = elm.color || '#fff';
+      t.style.fontFamily = elm.font || FONTS[0].v;
+      t.style.fontWeight = elm.weight || '700';
+      t.style.fontSize = (elm.size || 6) + 'cqw';
+      t.style.textAlign = elm.align || 'center';
+      t.style.lineHeight = '1.1';
+      if (elm.shadow) t.style.textShadow = '0 2px 8px rgba(0,0,0,.6)';
+      node.appendChild(t);
+    } else if (elm.type === 'icon') {
+      const t = el('div', { class: 'cv-icon' }, elm.icon || '⭐');
+      t.style.fontSize = (elm.size || 14) + 'cqw';
+      node.appendChild(t);
+    } else if (elm.type === 'shape') {
+      const sh = el('div', { class: 'cv-shape' });
+      sh.style.background = elm.fill || '#ffffff';
+      sh.style.opacity = elm.fillOpacity != null ? elm.fillOpacity : 1;
+      if (elm.shape === 'circle') sh.style.borderRadius = '50%';
+      else if (elm.shape === 'line') { sh.style.height = (elm.thickness || 8) + 'px'; sh.style.alignSelf = 'center'; sh.style.marginTop = 'auto'; sh.style.marginBottom = 'auto'; }
+      else sh.style.borderRadius = (elm.radius || 12) + 'px';
+      if (elm.border) sh.style.border = `2px solid ${elm.borderColor || '#fff'}`;
+      node.appendChild(sh);
+    } else if (elm.type === 'image') {
+      const im = el('div', { class: 'cv-image' });
+      im.style.backgroundImage = `url('${elm.src || ''}')`;
+      im.style.borderRadius = (elm.radius || 8) + 'px';
+      if (elm.circle) im.style.borderRadius = '50%';
+      node.appendChild(im);
+    } else if (elm.type === 'slot') {
+      // rendered by caller in static mode; placeholder in editor
+      if (ctx.renderSlot) { node.appendChild(ctx.renderSlot(elm)); }
+      else {
+        node.appendChild(el('div', { class: 'cv-slot' }, [
+          el('div', { class: 'text-[10px] opacity-70 text-center' }, '🃏 slot'),
+        ]));
+      }
+    }
+    return node;
+  }
+
+  /* ============================================================
+     STATIC render (player & previews) — not interactive
+     opts: { interactive:false, renderSlot:(elm)=>node, class }
+     ============================================================ */
+  function renderStatic(design, opts) {
+    opts = opts || {};
+    const stage = el('div', { class: 'cv-stage ' + (opts.class || '') });
+    stage.setAttribute('style', bgStyle(design && design.bg) + ';container-type:size;');
+    (design && design.els || []).forEach((elm) => stage.appendChild(elementNode(elm, opts)));
+    return stage;
+  }
+
+  /* ============================================================
+     OPEN editor (full-screen overlay)
+     ============================================================ */
+  function open(config) {
+    const aspect = config.aspect || '3 / 4';
+    // deep clone so cancel discards changes
+    const design = JSON.parse(JSON.stringify(config.design || blankDesign()));
+    let selectedId = null;
+
+    const overlay = el('div', { class: 'cv-overlay' });
+
+    /* --- top bar --- */
+    const topbar = el('div', { class: 'cv-topbar glass' }, [
+      el('div', { class: 'flex items-center gap-2 min-w-0' }, [
+        el('button', { class: 'btn-secondary !px-3 !py-2 text-sm', onclick: cancel }, '✕'),
+        el('span', { class: 'truncate font-display font-bold' }, config.title || 'Editor'),
+      ]),
+      el('div', { class: 'flex items-center gap-2' }, [
+        el('button', { class: 'btn-secondary !px-3 !py-2 text-sm', onclick: () => bgPanel() }, '🎨 Fundo'),
+        el('button', { class: 'btn-primary !px-4 !py-2 text-sm', onclick: done }, '✓ Salvar'),
+      ]),
+    ]);
+
+    /* --- add toolbar --- */
+    const addbar = el('div', { class: 'cv-addbar glass-soft' }, [
+      addBtn('🔤', 'Texto', () => addText()),
+      addBtn('😀', 'Emoji', () => emojiPicker()),
+      addBtn('▭', 'Forma', () => shapePicker()),
+      addBtn('🖼️', 'Imagem', () => addImage()),
+      config.allowSlots ? addBtn('🃏', 'Slot', () => addSlot()) : null,
+    ]);
+
+    /* --- canvas stage --- */
+    const stage = el('div', { class: 'cv-stage cv-edit' });
+    stage.setAttribute('style', bgStyle(design.bg) + ';container-type:size;');
+    const stageWrap = el('div', { class: 'cv-canvas-wrap' }, [stage]);
+    stageWrap.style.aspectRatio = aspect;
+
+    /* --- properties panel (bottom sheet) --- */
+    const propPanel = el('div', { class: 'cv-props glass' });
+
+    const center = el('div', { class: 'cv-center' }, [stageWrap]);
+    overlay.appendChild(topbar);
+    overlay.appendChild(addbar);
+    overlay.appendChild(center);
+    overlay.appendChild(propPanel);
+    document.getElementById('modal-root').appendChild(overlay);
+
+    /* ---------- rendering ---------- */
+    function renderStage() {
+      clear(stage);
+      stage.setAttribute('style', bgStyle(design.bg) + ';container-type:size;');
+      design.els.forEach((elm) => {
+        const node = elementNode(elm, {});
+        node.classList.add('cv-el--edit');
+        if (elm.id === selectedId) node.classList.add('cv-selected');
+        bindDrag(node, elm);
+        if (elm.id === selectedId) addHandles(node, elm);
+        stage.appendChild(node);
+      });
+    }
+
+    function select(id) { selectedId = id; renderStage(); renderProps(); }
+    function deselectIfBlank(e) { if (e.target === stage) select(null); }
+    stage.addEventListener('pointerdown', deselectIfBlank);
+
+    /* ---------- drag & resize (pointer events) ---------- */
+    function bindDrag(node, elm) {
+      node.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.cv-handle')) return; // handled separately
+        e.stopPropagation();
+        select(elm.id);
+        const rect = stage.getBoundingClientRect();
+        const sx = e.clientX, sy = e.clientY, ex = elm.x, ey = elm.y;
+        node.setPointerCapture(e.pointerId);
+        function move(ev) {
+          const dx = ((ev.clientX - sx) / rect.width) * 100;
+          const dy = ((ev.clientY - sy) / rect.height) * 100;
+          elm.x = clamp(ex + dx, -5, 100 - elm.w + 5);
+          elm.y = clamp(ey + dy, -5, 100 - elm.h + 5);
+          node.style.left = elm.x + '%'; node.style.top = elm.y + '%';
+        }
+        function up(ev) { node.releasePointerCapture(e.pointerId); node.removeEventListener('pointermove', move); node.removeEventListener('pointerup', up); }
+        node.addEventListener('pointermove', move);
+        node.addEventListener('pointerup', up);
+      });
+    }
+
+    function addHandles(node, elm) {
+      // resize (bottom-right)
+      const rh = el('div', { class: 'cv-handle cv-handle--resize', title: 'Redimensionar' }, '⤡');
+      rh.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        const rect = stage.getBoundingClientRect();
+        const sx = e.clientX, sy = e.clientY, ew = elm.w, eh = elm.h;
+        rh.setPointerCapture(e.pointerId);
+        function move(ev) {
+          const dw = ((ev.clientX - sx) / rect.width) * 100;
+          const dh = ((ev.clientY - sy) / rect.height) * 100;
+          elm.w = clamp(ew + dw, 5, 120);
+          elm.h = clamp(eh + dh, 5, 120);
+          node.style.width = elm.w + '%'; node.style.height = elm.h + '%';
+        }
+        function up() { rh.releasePointerCapture(e.pointerId); rh.removeEventListener('pointermove', move); rh.removeEventListener('pointerup', up); }
+        rh.addEventListener('pointermove', move); rh.addEventListener('pointerup', up);
+      });
+      // delete (top-right)
+      const dl = el('div', { class: 'cv-handle cv-handle--del', title: 'Excluir', onclick: (e) => { e.stopPropagation(); removeEl(elm.id); } }, '×');
+      node.appendChild(rh); node.appendChild(dl);
+    }
+
+    /* ---------- element ops ---------- */
+    function addEl(elm) { design.els.push(elm); select(elm.id); }
+    function removeEl(id) { design.els = design.els.filter((x) => x.id !== id); select(null); }
+    function duplicateEl(elm) { const c = JSON.parse(JSON.stringify(elm)); c.id = uid(); c.x = clamp(c.x + 5, 0, 90); c.y = clamp(c.y + 5, 0, 90); addEl(c); }
+    function layer(elm, dir) {
+      const i = design.els.indexOf(elm); if (i < 0) return;
+      const j = i + dir; if (j < 0 || j >= design.els.length) return;
+      design.els.splice(i, 1); design.els.splice(j, 0, elm); renderStage(); renderProps();
+    }
+
+    function addText() { addEl({ id: uid(), type: 'text', x: 25, y: 40, w: 50, h: 14, rot: 0, text: 'Seu texto', color: '#ffffff', font: FONTS[0].v, weight: '700', size: 8, align: 'center', shadow: true }); }
+    function addSlot() { addEl({ id: uid(), type: 'slot', x: 38, y: 36, w: 24, h: 28, rot: 0, slotId: Store.uid('slot') }); }
+    function addShapeKind(kind) { addEl({ id: uid(), type: 'shape', shape: kind, x: 35, y: 35, w: 30, h: 30, rot: 0, fill: '#f472b6', fillOpacity: 1, radius: 14, thickness: 8 }); }
+    function addIcon(icon) { addEl({ id: uid(), type: 'icon', x: 40, y: 38, w: 20, h: 20, rot: 0, icon: icon, size: 16 }); }
+    async function addImage() {
+      pickFile(async (file) => { try { const src = await readImage(file); addEl({ id: uid(), type: 'image', x: 28, y: 28, w: 44, h: 44, rot: 0, src: src, radius: 10 }); } catch (e) { toast('Imagem inválida', 'error'); } });
+    }
+
+    /* ---------- pickers ---------- */
+    function emojiPicker() {
+      const emojis = '⭐🏆🔥👑💎⚽🥅🧤🦁🐍🚀✨🎯💥🌟⚡🛡️🎖️🏅📣🎉💫🔱'.match(/./gu);
+      sheet('Escolha um emoji', el('div', { class: 'grid grid-cols-6 gap-2' },
+        emojis.map((em) => el('button', { class: 'ghost-btn !h-11 !w-full text-xl', onclick: () => { closeSheet(); addIcon(em); } }, em))));
+    }
+    function shapePicker() {
+      sheet('Adicionar forma', el('div', { class: 'grid grid-cols-3 gap-3' }, [
+        shapeOpt('▭', 'Retângulo', 'rect'), shapeOpt('⬤', 'Círculo', 'circle'), shapeOpt('▬', 'Linha', 'line'),
+      ]));
+    }
+    function shapeOpt(icon, label, kind) {
+      return el('button', { class: 'btn-secondary flex-col !py-4', onclick: () => { closeSheet(); addShapeKind(kind); } }, [el('div', { class: 'text-2xl' }, icon), el('div', { class: 'text-xs' }, label)]);
+    }
+
+    /* ---------- background panel ---------- */
+    function bgPanel() {
+      const body = el('div', { class: 'space-y-3' });
+      const typeRow = el('div', { class: 'grid grid-cols-3 gap-2' }, [
+        bgTypeBtn('gradient', 'Gradiente'), bgTypeBtn('solid', 'Cor'), bgTypeBtn('image', 'Imagem'),
+      ]);
+      body.appendChild(typeRow);
+      const dyn = el('div', { class: 'space-y-3' });
+      body.appendChild(dyn);
+      function renderDyn() {
+        clear(dyn);
+        if (design.bg.type === 'gradient') {
+          dyn.appendChild(field2('Cor 1', colorIn(design.bg.color1, (v) => { design.bg.color1 = v; refreshBg(); }), 'Cor 2', colorIn(design.bg.color2, (v) => { design.bg.color2 = v; refreshBg(); })));
+          dyn.appendChild(labeledRange('Ângulo', design.bg.angle, 0, 360, (v) => { design.bg.angle = v; refreshBg(); }));
+        } else if (design.bg.type === 'solid') {
+          dyn.appendChild(field('Cor', colorIn(design.bg.color, (v) => { design.bg.color = v; refreshBg(); })));
+        } else {
+          if (design.bg.image) {
+            dyn.appendChild(el('div', { class: 'relative' }, [el('img', { src: design.bg.image, class: 'h-28 w-full rounded-xl object-cover' }), el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8', onclick: () => { design.bg.image = ''; renderDyn(); refreshBg(); } }, '×')]));
+          } else {
+            dyn.appendChild(dropzone({ label: 'Fundo da ' + (config.allowSlots ? 'página' : 'figurinha'), onImage: (url) => { design.bg.image = url; renderDyn(); refreshBg(); } }));
+          }
+        }
+      }
+      function refreshBg() { stage.setAttribute('style', bgStyle(design.bg) + ';container-type:size;'); typeRow.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.t === design.bg.type)); }
+      renderDyn();
+      sheet('🎨 Fundo', body);
+      refreshBg();
+      function bgTypeBtn(t, label) { return el('button', { class: 'nav-tab ' + (design.bg.type === t ? 'active' : ''), dataset: { t }, onclick: () => { design.bg.type = t; renderDyn(); refreshBg(); } }, label); }
+    }
+
+    /* ---------- properties for selected element ---------- */
+    function renderProps() {
+      clear(propPanel);
+      const elm = design.els.find((x) => x.id === selectedId);
+      if (!elm) {
+        propPanel.appendChild(el('p', { class: 'text-center text-xs text-slate-400 py-2' }, '👆 Toque em um elemento para editar — ou adicione um acima.'));
+        return;
+      }
+      const head = el('div', { class: 'mb-2 flex items-center justify-between' }, [
+        el('span', { class: 'text-xs font-semibold uppercase tracking-wide text-slate-400' }, typeLabel(elm.type)),
+        el('div', { class: 'flex gap-1' }, [
+          iconBtn('⬇️', 'Para trás', () => layer(elm, -1)),
+          iconBtn('⬆️', 'Para frente', () => layer(elm, 1)),
+          iconBtn('⧉', 'Duplicar', () => duplicateEl(elm)),
+          iconBtn('🗑', 'Excluir', () => removeEl(elm.id)),
+        ]),
+      ]);
+      propPanel.appendChild(head);
+
+      const ctrls = el('div', { class: 'cv-props-grid' });
+      if (elm.type === 'text') {
+        const ta = el('textarea', { class: 'field col-span-2', rows: '2' }); ta.value = elm.text; ta.addEventListener('input', (e) => { elm.text = e.target.value; renderStage(); });
+        ctrls.appendChild(wrap2('Texto', ta));
+        ctrls.appendChild(field('Cor', colorIn(elm.color, (v) => { elm.color = v; renderStage(); })));
+        ctrls.appendChild(field('Fonte', selectIn(FONTS.map((f) => [f.v, f.n]), elm.font, (v) => { elm.font = v; renderStage(); })));
+        ctrls.appendChild(wrap2('Tamanho', range(elm.size, 3, 30, (v) => { elm.size = v; renderStage(); })));
+        ctrls.appendChild(field('Alinhar', selectIn([['center', 'Centro'], ['left', 'Esquerda'], ['right', 'Direita']], elm.align, (v) => { elm.align = v; renderStage(); })));
+        ctrls.appendChild(field('Peso', selectIn([['400', 'Normal'], ['700', 'Negrito'], ['900', 'Black']], elm.weight, (v) => { elm.weight = v; renderStage(); })));
+      } else if (elm.type === 'icon') {
+        ctrls.appendChild(wrap2('Tamanho', range(elm.size, 4, 40, (v) => { elm.size = v; renderStage(); })));
+      } else if (elm.type === 'shape') {
+        ctrls.appendChild(field('Cor', colorIn(elm.fill, (v) => { elm.fill = v; renderStage(); })));
+        ctrls.appendChild(wrap2('Opacidade', range((elm.fillOpacity ?? 1) * 100, 0, 100, (v) => { elm.fillOpacity = v / 100; renderStage(); })));
+        if (elm.shape === 'rect') ctrls.appendChild(wrap2('Cantos', range(elm.radius, 0, 60, (v) => { elm.radius = v; renderStage(); })));
+      } else if (elm.type === 'image') {
+        ctrls.appendChild(wrap2('Cantos', range(elm.radius, 0, 50, (v) => { elm.radius = v; renderStage(); })));
+        ctrls.appendChild(field('Formato', selectIn([['0', 'Quadrado'], ['1', 'Círculo']], elm.circle ? '1' : '0', (v) => { elm.circle = v === '1'; renderStage(); })));
+      } else if (elm.type === 'slot') {
+        ctrls.appendChild(el('p', { class: 'col-span-2 text-xs text-slate-400' }, 'Espaço onde a figurinha será colada no Modo Jogador.'));
+      }
+      // common: rotation + opacity
+      ctrls.appendChild(wrap2('Rotação', range(elm.rot || 0, -180, 180, (v) => { elm.rot = v; renderStage(); })));
+      propPanel.appendChild(ctrls);
+    }
+
+    /* ---------- sheets ---------- */
+    let sheetEl = null;
+    function sheet(title, body) {
+      closeSheet();
+      sheetEl = el('div', { class: 'cv-sheet glass view-in' }, [
+        el('div', { class: 'mb-3 flex items-center justify-between' }, [el('h4', { class: 'font-display font-bold' }, title), el('button', { class: 'ghost-btn', onclick: closeSheet }, '×')]),
+        body,
+      ]);
+      overlay.appendChild(sheetEl);
+    }
+    function closeSheet() { if (sheetEl) { sheetEl.remove(); sheetEl = null; } }
+
+    function done() { overlay.remove(); config.onSave && config.onSave(design); }
+    function cancel() { overlay.remove(); }
+
+    renderStage();
+    renderProps();
+  }
+
+  /* ---------- small builders ---------- */
+  function addBtn(icon, label, onClick) { return el('button', { class: 'cv-add', onclick: onClick }, [el('span', { class: 'text-lg' }, icon), el('span', { class: 'text-[10px]' }, label)]); }
+  function iconBtn(icon, title, onClick) { return el('button', { class: 'ghost-btn !h-8 !w-8 text-sm', title, onclick: onClick }, icon); }
+  function typeLabel(t) { return ({ text: 'Texto', icon: 'Emoji', shape: 'Forma', image: 'Imagem', slot: 'Slot' })[t] || t; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function pickFile(cb) { const i = el('input', { type: 'file', accept: 'image/*', class: 'hidden' }); document.body.appendChild(i); i.addEventListener('change', () => { if (i.files[0]) cb(i.files[0]); i.remove(); }); i.click(); }
+
+  function field(label, control) { return el('div', {}, [el('label', { class: 'field-label' }, label), control]); }
+  function wrap2(label, control) { return el('div', { class: 'col-span-2' }, [el('label', { class: 'field-label' }, label), control]); }
+  function field2(l1, c1, l2, c2) { return el('div', { class: 'grid grid-cols-2 gap-2 col-span-2' }, [field(l1, c1), field(l2, c2)]); }
+  function colorIn(value, onChange) { const n = el('input', { type: 'color', value: value || '#ffffff', class: 'h-9 w-full rounded-lg bg-transparent' }); n.addEventListener('input', (e) => onChange(e.target.value)); return n; }
+  function range(value, min, max, onChange) { const n = el('input', { type: 'range', min: String(min), max: String(max), value: String(value), class: 'w-full accent-fuchsia-500' }); n.addEventListener('input', (e) => onChange(parseFloat(e.target.value))); return n; }
+  function labeledRange(label, value, min, max, onChange) { return el('div', { class: 'col-span-2' }, [el('label', { class: 'field-label' }, label), range(value, min, max, onChange)]); }
+  function selectIn(options, value, onChange) {
+    const n = el('select', { class: 'field' });
+    options.forEach(([v, label]) => { const o = el('option', { value: v }, label); if (String(v) === String(value)) o.selected = true; n.appendChild(o); });
+    n.addEventListener('change', (e) => onChange(e.target.value));
+    return n;
+  }
+
+  window.Canvas = { renderStatic, open, blankDesign, bgStyle };
+})();
+
+
 /* ===== js/stickers.js ===== */
 /* ============================================================
    stickers.js — render a sticker card from its definition
@@ -689,6 +1107,11 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   function render(sticker, opts) {
     opts = opts || {};
     const rar = RARITIES[sticker.type] || RARITIES.normal;
+
+    // Custom Canva design takes over the card face (frame/holo/badges stay)
+    if (sticker.design && sticker.design.els && window.Canvas) {
+      return renderCustom(sticker, rar);
+    }
 
     const photo = sticker.photo
       ? el('div', { class: 'sticker__photo', style: `background-image:url('${sticker.photo}')` })
@@ -726,6 +1149,18 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     const card = el('div', { class: 'sticker sticker--' + (sticker.type || 'normal') }, layers);
     if (opts.onClick) card.addEventListener('click', opts.onClick);
     return card;
+  }
+
+  /* render a sticker whose face is a custom Canva design */
+  function renderCustom(sticker, rar) {
+    const face = window.Canvas.renderStatic(sticker.design, {});
+    face.classList.add('sticker__customface');
+    const layers = [face];
+    if (sticker.type === 'shiny') { layers.push(el('div', { class: 'sticker__holo' })); layers.push(el('div', { class: 'sticker__holo2' })); }
+    if (sticker.type === 'legend') { layers.push(el('div', { class: 'sticker__holo' })); layers.push(el('div', { class: 'sticker__crown' }, '👑')); }
+    if (sticker.number != null) layers.push(el('div', { class: 'sticker__num' }, '#' + sticker.number));
+    layers.push(el('div', { class: 'sticker__badge' }, rar.badge));
+    return el('div', { class: 'sticker sticker--' + (sticker.type || 'normal') }, layers);
   }
 
   function initials(name) {
@@ -895,19 +1330,98 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   }
 
   function pageEditor(page, idx, s) {
-    const slots = el('div', { class: 'grid grid-cols-3 gap-2 sm:grid-cols-6' },
-      page.slots.map((slot) => slotPreview(slot)));
+    const isFree = page.layout === 'free' && page.design;
 
-    const head = el('div', { class: 'mb-3 flex items-center justify-between' }, [
+    const head = el('div', { class: 'mb-3 flex flex-wrap items-center justify-between gap-2' }, [
       el('h4', { class: 'font-display font-semibold' }, `Página ${idx + 1}`),
       el('div', { class: 'flex items-center gap-2' }, [
-        el('button', { class: 'ghost-btn', title: 'Remover slot', onclick: () => changeSlots(page.id, -1) }, '－'),
-        el('span', { class: 'text-xs text-slate-400' }, page.slots.length + ' slots'),
-        el('button', { class: 'ghost-btn', title: 'Adicionar slot', onclick: () => changeSlots(page.id, 1) }, '＋'),
+        el('button', { class: 'btn-secondary !px-3 !py-1.5 text-xs', title: 'Editor livre estilo Canva', onclick: () => openPageDesigner(page) }, '✨ Personalizar'),
+        !isFree ? el('button', { class: 'ghost-btn', title: 'Remover slot', onclick: () => changeSlots(page.id, -1) }, '－') : null,
+        !isFree ? el('span', { class: 'text-xs text-slate-400' }, page.slots.length + ' slots') : null,
+        !isFree ? el('button', { class: 'ghost-btn', title: 'Adicionar slot', onclick: () => changeSlots(page.id, 1) }, '＋') : null,
         el('button', { class: 'ghost-btn !text-rose-300', title: 'Excluir página', onclick: () => removePage(page.id) }, '🗑'),
       ]),
     ]);
-    return el('div', { class: 'glass-soft rounded-xl p-4 page-in' }, [head, slots]);
+
+    let bodyNode;
+    if (isFree) {
+      const stage = window.Canvas.renderStatic(page.design, {
+        renderSlot: (elm) => editorFreeSlot(elm, page),
+      });
+      const wrap = el('div', { class: 'relative mx-auto', style: 'aspect-ratio:3/4;max-width:340px' }, [stage,
+        el('button', { class: 'btn-primary absolute bottom-2 right-2 !px-3 !py-1.5 text-xs', onclick: () => openPageDesigner(page) }, '✏ Editar design'),
+      ]);
+      window.UI.bindHolo(wrap);
+      bodyNode = el('div', {}, [
+        el('p', { class: 'mb-2 text-center text-xs text-slate-400' }, 'Toque num slot 🃏 para vincular a figurinha que pertence a ele.'),
+        wrap,
+      ]);
+    } else {
+      bodyNode = el('div', { class: 'grid grid-cols-3 gap-2 sm:grid-cols-6' },
+        page.slots.map((slot) => slotPreview(slot)));
+    }
+    return el('div', { class: 'glass-soft rounded-xl p-4 page-in' }, [head, bodyNode]);
+  }
+
+  /* slot node inside the free (Canva) page preview — used to link a sticker */
+  function editorFreeSlot(elm, page) {
+    const slot = page.slots.find((sl) => sl.id === elm.slotId);
+    const sticker = slot && slot.stickerId ? Store.stickerById(slot.stickerId) : null;
+    if (sticker) {
+      const node = window.Stickers.render(sticker, { showStats: false });
+      const wrap = el('div', { class: 'relative h-full w-full' }, [node,
+        el('button', { class: 'absolute -right-1 -top-1 z-20 grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-xs',
+          onclick: (e) => { e.stopPropagation(); Store.update((st) => { const sl = findSlot(st, elm.slotId); if (sl) sl.stickerId = null; }); } }, '×'),
+      ]);
+      return wrap;
+    }
+    return el('div', { class: 'cv-slot cursor-pointer', onclick: () => assignStickerToSlot(elm.slotId) }, [
+      el('div', { class: 'text-center text-[10px] opacity-80' }, '＋ vincular'),
+    ]);
+  }
+
+  /* open the Canva-like designer for a page */
+  function openPageDesigner(page) {
+    let design = page.design;
+    if (!design) {
+      // seed from current grid slots, laid out in a grid of slot elements
+      design = window.Canvas.blankDesign();
+      design.els.push({ id: Store.uid('el'), type: 'text', x: 8, y: 4, w: 84, h: 12, rot: 0, text: `Página`, color: '#ffffff', font: '"Space Grotesk", sans-serif', weight: '700', size: 9, align: 'center', shadow: true });
+      const n = page.slots.length || 6;
+      const cols = n <= 4 ? 2 : 3;
+      const rows = Math.ceil(n / cols);
+      const cw = 84 / cols, ch = Math.min(26, (78) / rows);
+      page.slots.forEach((sl, i) => {
+        const r = Math.floor(i / cols), c = i % cols;
+        design.els.push({ id: Store.uid('el'), type: 'slot', slotId: sl.id,
+          x: 8 + c * cw + cw * 0.08, y: 18 + r * (ch + 2), w: cw * 0.84, h: ch, rot: 0 });
+      });
+    }
+    window.Canvas.open({
+      design, aspect: '3 / 4', title: 'Personalizar página', allowSlots: true,
+      onSave: (d) => {
+        Store.update((st) => {
+          const p = st.album.pages.find((x) => x.id === page.id); if (!p) return;
+          p.design = d; p.layout = 'free';
+          reconcilePageSlots(p, d);
+        });
+        toast('Página atualizada ✨', 'success');
+        window.App.rerender();
+      },
+    });
+  }
+
+  /* keep page.slots in sync with slot elements present in the design */
+  function reconcilePageSlots(page, design) {
+    const slotEls = design.els.filter((e) => e.type === 'slot');
+    const ids = new Set(slotEls.map((e) => e.slotId));
+    // add missing
+    slotEls.forEach((e) => {
+      if (!page.slots.find((sl) => sl.id === e.slotId)) page.slots.push({ id: e.slotId, stickerId: null });
+    });
+    // remove orphan slots no longer in design
+    page.slots = page.slots.filter((sl) => ids.has(sl.id));
+    if (!page.slots.length) page.slots.push(Store.makeSlot());
   }
 
   function slotPreview(slot) {
@@ -1014,7 +1528,7 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   /* Creator form state (transient draft) */
   let draft = newDraft();
   function newDraft() {
-    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal' };
+    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal', design: null };
   }
 
   function stickerCreator(editing) {
@@ -1045,6 +1559,32 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
 
     function bindLive(field) { return (v) => { d[field] = v; livePreview(); }; }
 
+    /* Canva-like custom art designer for the sticker */
+    const artBox = el('div', { class: 'mt-3' });
+    function renderArtBox() {
+      clear(artBox);
+      const has = d.design && d.design.els && d.design.els.length;
+      artBox.appendChild(el('div', { class: 'flex gap-2' }, [
+        el('button', { class: 'btn-primary flex-1 !py-2 text-sm', onclick: openArt }, has ? '✏ Editar arte (Canva)' : '✨ Personalizar arte (Canva)'),
+        has ? el('button', { class: 'btn-secondary !px-3 !py-2 text-sm', title: 'Remover arte custom', onclick: () => { d.design = null; renderArtBox(); livePreview(); } }, '↺') : null,
+      ]));
+      if (has) artBox.appendChild(el('p', { class: 'mt-1 text-center text-[11px] text-emerald-300' }, '🎨 Arte personalizada ativa'));
+    }
+    function openArt() {
+      let design = d.design;
+      if (!design) {
+        design = window.Canvas.blankDesign();
+        if (d.photo) design.els.push({ id: Store.uid('el'), type: 'image', x: 12, y: 8, w: 76, h: 56, rot: 0, src: d.photo, radius: 12 });
+        design.els.push({ id: Store.uid('el'), type: 'text', x: 6, y: 70, w: 88, h: 16, rot: 0, text: d.name || 'NOME', color: '#ffffff', font: '"Space Grotesk", sans-serif', weight: '900', size: 11, align: 'center', shadow: true });
+        if (d.team) design.els.push({ id: Store.uid('el'), type: 'text', x: 6, y: 86, w: 88, h: 8, rot: 0, text: d.team, color: '#e2e8f0', font: 'Inter, sans-serif', weight: '700', size: 6, align: 'center', shadow: true });
+      }
+      window.Canvas.open({
+        design, aspect: '3 / 4', title: 'Arte da figurinha', allowSlots: false,
+        onSave: (dsg) => { d.design = dsg; renderArtBox(); livePreview(); toast('Arte salva 🎨', 'success'); },
+      });
+    }
+    renderArtBox();
+
     const rarityButtons = el('div', { class: 'grid grid-cols-3 gap-2' }, Object.keys(RARITIES).map((key) =>
       el('button', {
         class: 'btn-secondary !px-2 !py-2 text-xs ' + (d.type === key ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
@@ -1068,6 +1608,7 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       el('div', { class: 'mb-4' }, previewWrap),
 
       labeled('Tipo / Raridade', rarityButtons),
+      artBox,
       el('div', { class: 'my-4 border-t border-white/10' }),
 
       el('p', { class: 'mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400' }, '① Foto personalizada'),
@@ -1495,11 +2036,22 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     }
 
     s.album.pages.forEach((page, idx) => {
-      const grid = el('div', { class: 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6' },
-        page.slots.map((slot) => albumSlot(slot, s)));
+      let content;
+      if (page.layout === 'free' && page.design) {
+        const stage = window.Canvas.renderStatic(page.design, {
+          renderSlot: (elm) => {
+            const slot = page.slots.find((sl) => sl.id === elm.slotId);
+            return slot ? albumSlot(slot, s) : el('div');
+          },
+        });
+        content = el('div', { class: 'mx-auto', style: 'aspect-ratio:3/4;max-width:420px' }, [stage]);
+      } else {
+        content = el('div', { class: 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6' },
+          page.slots.map((slot) => albumSlot(slot, s)));
+      }
       body.appendChild(el('div', { class: 'glass mb-5 rounded-2xl p-5 page-in' }, [
         el('h3', { class: 'mb-4 font-display font-semibold text-slate-300' }, `Página ${idx + 1}`),
-        grid,
+        content,
       ]));
     });
 

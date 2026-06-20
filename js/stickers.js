@@ -13,6 +13,11 @@
     opts = opts || {};
     const rar = RARITIES[sticker.type] || RARITIES.normal;
 
+    // Custom Canva design takes over the card face (frame/holo/badges stay)
+    if (sticker.design && sticker.design.els && window.Canvas) {
+      return renderCustom(sticker, rar);
+    }
+
     const photo = sticker.photo
       ? el('div', { class: 'sticker__photo', style: `background-image:url('${sticker.photo}')` })
       : el('div', { class: 'sticker__photo sticker__photo--empty' }, initials(sticker.name));
@@ -49,6 +54,18 @@
     const card = el('div', { class: 'sticker sticker--' + (sticker.type || 'normal') }, layers);
     if (opts.onClick) card.addEventListener('click', opts.onClick);
     return card;
+  }
+
+  /* render a sticker whose face is a custom Canva design */
+  function renderCustom(sticker, rar) {
+    const face = window.Canvas.renderStatic(sticker.design, {});
+    face.classList.add('sticker__customface');
+    const layers = [face];
+    if (sticker.type === 'shiny') { layers.push(el('div', { class: 'sticker__holo' })); layers.push(el('div', { class: 'sticker__holo2' })); }
+    if (sticker.type === 'legend') { layers.push(el('div', { class: 'sticker__holo' })); layers.push(el('div', { class: 'sticker__crown' }, '👑')); }
+    if (sticker.number != null) layers.push(el('div', { class: 'sticker__num' }, '#' + sticker.number));
+    layers.push(el('div', { class: 'sticker__badge' }, rar.badge));
+    return el('div', { class: 'sticker sticker--' + (sticker.type || 'normal') }, layers);
   }
 
   function initials(name) {

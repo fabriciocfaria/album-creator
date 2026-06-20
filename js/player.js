@@ -232,11 +232,22 @@
     }
 
     s.album.pages.forEach((page, idx) => {
-      const grid = el('div', { class: 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6' },
-        page.slots.map((slot) => albumSlot(slot, s)));
+      let content;
+      if (page.layout === 'free' && page.design) {
+        const stage = window.Canvas.renderStatic(page.design, {
+          renderSlot: (elm) => {
+            const slot = page.slots.find((sl) => sl.id === elm.slotId);
+            return slot ? albumSlot(slot, s) : el('div');
+          },
+        });
+        content = el('div', { class: 'mx-auto', style: 'aspect-ratio:3/4;max-width:420px' }, [stage]);
+      } else {
+        content = el('div', { class: 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6' },
+          page.slots.map((slot) => albumSlot(slot, s)));
+      }
       body.appendChild(el('div', { class: 'glass mb-5 rounded-2xl p-5 page-in' }, [
         el('h3', { class: 'mb-4 font-display font-semibold text-slate-300' }, `Página ${idx + 1}`),
-        grid,
+        content,
       ]));
     });
 
