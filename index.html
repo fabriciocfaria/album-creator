@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Album Creator · Criador e Colecionador de Figurinhas</title>
+  <meta name="description" content="Crie, configure e colecione seu próprio álbum de figurinhas com pacotinhos, raridades e animações premium." />
+
+  <!-- Tailwind CSS (Play CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+            body: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          keyframes: {
+            floaty: {
+              '0%,100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-8px)' },
+            },
+            shimmer: {
+              '0%': { backgroundPosition: '-200% 0' },
+              '100%': { backgroundPosition: '200% 0' },
+            },
+          },
+          animation: {
+            floaty: 'floaty 6s ease-in-out infinite',
+            shimmer: 'shimmer 2.5s linear infinite',
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Cinzel:wght@600;700;900&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body class="font-body antialiased min-h-screen text-slate-100 selection:bg-fuchsia-500/40">
+  <!-- Animated gradient backdrop -->
+  <div id="app-backdrop" class="fixed inset-0 -z-10"></div>
+
+  <!-- Top navigation -->
+  <header class="sticky top-0 z-40">
+    <nav class="glass mx-auto mt-3 flex max-w-7xl items-center justify-between gap-4 rounded-2xl px-4 py-3 sm:px-6">
+      <button id="nav-logo" class="group flex items-center gap-3">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-xl shadow-lg shadow-fuchsia-500/30 transition group-hover:scale-105">⚽</span>
+        <span class="hidden text-left sm:block">
+          <span class="block font-display text-lg font-bold leading-none">Album Creator</span>
+          <span class="block text-[11px] uppercase tracking-[0.25em] text-slate-400">stickers studio</span>
+        </span>
+      </button>
+
+      <div id="nav-tabs" class="flex items-center gap-1 rounded-xl bg-black/20 p-1">
+        <button data-mode="menu"   class="nav-tab">Menu</button>
+        <button data-mode="editor" class="nav-tab">Editor</button>
+        <button data-mode="player" class="nav-tab">Jogar</button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-save"  class="ghost-btn hidden sm:inline-flex" title="Salvar projeto">💾</button>
+        <button id="btn-reset" class="ghost-btn" title="Reiniciar projeto">↺</button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main view container -->
+  <main id="view" class="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6"></main>
+
+  <!-- Toast container -->
+  <div id="toast-root" class="pointer-events-none fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 flex-col items-center gap-2"></div>
+
+  <!-- Modal root -->
+  <div id="modal-root"></div>
+
+  <script src="js/state.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/stickers.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

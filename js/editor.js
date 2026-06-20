@@ -1,0 +1,495 @@
+/* ============================================================
+   editor.js — MODO EDITOR
+   Tabs: Álbum (capa/contracapa/páginas/tema) · Figurinhas · Pacote
+   Exposed as window.Editor.render(container)
+   ============================================================ */
+(function () {
+  'use strict';
+  const { el, clear, toast, modal, confirm, dropzone } = window.UI;
+  const Store = window.Store;
+  const { RARITIES, THEMES } = Store;
+
+  let activeTab = 'album';
+
+  function render(container) {
+    const s = Store.get();
+    clear(container);
+
+    const header = el('div', { class: 'mb-6 flex flex-wrap items-center justify-between gap-4 view-in' }, [
+      el('div', {}, [
+        el('h1', { class: 'font-display text-2xl font-bold sm:text-3xl' }, '🎨 Modo Editor'),
+        el('p', { class: 'text-sm text-slate-400' }, 'Desenhe o álbum, crie figurinhas e configure os pacotinhos.'),
+      ]),
+      el('div', { class: 'glass-soft flex gap-1 rounded-xl p-1' }, [
+        tabBtn('album', '📔 Álbum'),
+        tabBtn('stickers', '🃏 Figurinhas'),
+        tabBtn('pack', '📦 Pacote'),
+      ]),
+    ]);
+    container.appendChild(header);
+
+    const body = el('div', { class: 'view-in' });
+    container.appendChild(body);
+
+    if (activeTab === 'album') renderAlbumTab(body, s);
+    else if (activeTab === 'stickers') renderStickersTab(body, s);
+    else renderPackTab(body, s);
+  }
+
+  function tabBtn(id, label) {
+    return el('button', {
+      class: 'nav-tab ' + (activeTab === id ? 'active' : ''),
+      onclick: () => { activeTab = id; window.App.rerender(); },
+    }, label);
+  }
+
+  /* ============================================================
+     TAB: ÁLBUM
+     ============================================================ */
+  function renderAlbumTab(body, s) {
+    const grid = el('div', { class: 'grid gap-6 lg:grid-cols-3' });
+
+    /* --- settings column --- */
+    const settings = el('div', { class: 'space-y-6 lg:col-span-1' });
+
+    // General
+    settings.appendChild(panel('Configurações Gerais', [
+      labeled('Título do álbum', input(s.album.title, (v) => Store.update((st) => { st.album.title = v; }, { silent: true }))),
+      labeled('Paleta de cores', themePicker(s)),
+    ]));
+
+    // Cover
+    settings.appendChild(panel('Capa', [
+      labeled('Título da capa', input(s.album.cover.title, (v) => Store.update((st) => { st.album.cover.title = v; }))),
+      labeled('Subtítulo', input(s.album.cover.subtitle, (v) => Store.update((st) => { st.album.cover.subtitle = v; }))),
+      imageField('Imagem de fundo da capa', s.album.cover.image,
+        (url) => Store.update((st) => { st.album.cover.image = url; }),
+        () => Store.update((st) => { st.album.cover.image = ''; })),
+    ]));
+
+    // Back cover
+    settings.appendChild(panel('Contracapa', [
+      labeled('Texto da contracapa', textarea(s.album.backCover.text, (v) => Store.update((st) => { st.album.backCover.text = v; }))),
+      imageField('Imagem de fundo da contracapa', s.album.backCover.image,
+        (url) => Store.update((st) => { st.album.backCover.image = url; }),
+        () => Store.update((st) => { st.album.backCover.image = ''; })),
+    ]));
+
+    grid.appendChild(settings);
+
+    /* --- preview + pages column --- */
+    const right = el('div', { class: 'space-y-6 lg:col-span-2' });
+
+    // Cover / back previews
+    right.appendChild(panel('Pré-visualização', [
+      el('div', { class: 'grid gap-4 sm:grid-cols-2' }, [
+        coverPreview(s.album.cover, 'front'),
+        coverPreview({ title: 'CONTRACAPA', subtitle: s.album.backCover.text, image: s.album.backCover.image }, 'back'),
+      ]),
+    ]));
+
+    // Pages manager
+    const pagesPanel = panel('Páginas & Slots', []);
+    const pagesHead = el('div', { class: 'mb-4 flex items-center justify-between' }, [
+      el('p', { class: 'text-sm text-slate-400' }, `${s.album.pages.length} páginas · ${Store.totalSlots()} slots no total`),
+      el('button', { class: 'btn-primary text-sm', onclick: addPage }, '＋ Nova página'),
+    ]);
+    pagesPanel.appendChild(pagesHead);
+
+    const pagesWrap = el('div', { class: 'space-y-5' });
+    s.album.pages.forEach((page, idx) => pagesWrap.appendChild(pageEditor(page, idx, s)));
+    pagesPanel.appendChild(pagesWrap);
+    right.appendChild(pagesPanel);
+
+    grid.appendChild(right);
+    body.appendChild(grid);
+  }
+
+  function themePicker(s) {
+    const labels = { dark: '🌙 Dark', light: '☀️ Light', neon: '🔮 Neon', vintage: '📜 Vintage' };
+    return el('div', { class: 'grid grid-cols-2 gap-2' }, THEMES.map((t) =>
+      el('button', {
+        class: 'btn-secondary text-sm ' + (s.album.theme === t ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
+        onclick: () => { Store.update((st) => { st.album.theme = t; }); window.App.applyTheme(); },
+      }, labels[t])
+    ));
+  }
+
+  function coverPreview(cover, side) {
+    const inner = el('div', {
+      class: 'relative flex h-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-white/20 p-6 text-center',
+      style: cover.image
+        ? `background-image:linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.65)),url('${cover.image}');background-size:cover;background-position:center;`
+        : 'background:linear-gradient(150deg,var(--accent),var(--accent-2));',
+    }, [
+      el('div', { class: 'text-3xl animate-floaty' }, side === 'front' ? '⚽' : '📖'),
+      el('h3', { class: 'font-display text-xl font-bold leading-tight drop-shadow' }, cover.title || '—'),
+      el('p', { class: 'text-xs text-white/80' }, cover.subtitle || ''),
+    ]);
+    return el('div', { class: 'aspect-[3/4] overflow-hidden rounded-2xl shadow-2xl' }, inner);
+  }
+
+  function pageEditor(page, idx, s) {
+    const slots = el('div', { class: 'grid grid-cols-3 gap-2 sm:grid-cols-6' },
+      page.slots.map((slot) => slotPreview(slot)));
+
+    const head = el('div', { class: 'mb-3 flex items-center justify-between' }, [
+      el('h4', { class: 'font-display font-semibold' }, `Página ${idx + 1}`),
+      el('div', { class: 'flex items-center gap-2' }, [
+        el('button', { class: 'ghost-btn', title: 'Remover slot', onclick: () => changeSlots(page.id, -1) }, '－'),
+        el('span', { class: 'text-xs text-slate-400' }, page.slots.length + ' slots'),
+        el('button', { class: 'ghost-btn', title: 'Adicionar slot', onclick: () => changeSlots(page.id, 1) }, '＋'),
+        el('button', { class: 'ghost-btn !text-rose-300', title: 'Excluir página', onclick: () => removePage(page.id) }, '🗑'),
+      ]),
+    ]);
+    return el('div', { class: 'glass-soft rounded-xl p-4 page-in' }, [head, slots]);
+  }
+
+  function slotPreview(slot) {
+    const s = Store.get();
+    const sticker = slot.stickerId ? Store.stickerById(slot.stickerId) : null;
+    if (sticker) {
+      return el('div', { class: 'relative' }, [
+        window.Stickers.render(sticker, { showStats: false }),
+        el('button', {
+          class: 'absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-xs',
+          title: 'Desvincular',
+          onclick: () => Store.update((st) => {
+            const sl = findSlot(st, slot.id); if (sl) sl.stickerId = null;
+          }),
+        }, '×'),
+      ]);
+    }
+    return el('div', { class: 'slot', onclick: () => assignStickerToSlot(slot.id) }, [
+      el('div', { class: 'slot__hint' }, '＋ vincular'),
+    ]);
+  }
+
+  function findSlot(st, slotId) {
+    for (const p of st.album.pages) { const sl = p.slots.find((x) => x.id === slotId); if (sl) return sl; }
+    return null;
+  }
+
+  /* Pick which sticker definition this slot expects (the album checklist) */
+  function assignStickerToSlot(slotId) {
+    const s = Store.get();
+    if (!s.stickers.length) { toast('Crie figurinhas primeiro na aba 🃏', 'info'); activeTab = 'stickers'; window.App.rerender(); return; }
+    const used = new Set(s.album.pages.flatMap((p) => p.slots.map((sl) => sl.stickerId).filter(Boolean)));
+    const list = el('div', { class: 'grid max-h-[55vh] grid-cols-3 gap-3 overflow-y-auto p-1 sm:grid-cols-4' });
+    const m = modal([
+      el('h3', { class: 'mb-1 font-display text-lg font-bold' }, 'Vincular figurinha ao slot'),
+      el('p', { class: 'mb-4 text-sm text-slate-400' }, 'Escolha qual figurinha pertence a este espaço do álbum.'),
+      list,
+    ], { size: 'max-w-2xl' });
+    s.stickers.forEach((st) => {
+      const card = window.Stickers.render(st, { showStats: false });
+      const w = el('div', { class: 'cursor-pointer transition ' + (used.has(st.id) ? 'opacity-40' : 'hover:scale-105') }, [card]);
+      w.addEventListener('click', () => {
+        Store.update((state) => { const sl = findSlot(state, slotId); if (sl) sl.stickerId = st.id; });
+        m.close();
+      });
+      list.appendChild(w);
+    });
+    window.UI.bindHolo(list);
+  }
+
+  function addPage() { Store.update((st) => st.album.pages.push(Store.makePage(6))); }
+  function removePage(id) {
+    confirm('Excluir esta página e seus vínculos?', () =>
+      Store.update((st) => { st.album.pages = st.album.pages.filter((p) => p.id !== id); }), { yes: 'Excluir' });
+  }
+  function changeSlots(pageId, delta) {
+    Store.update((st) => {
+      const p = st.album.pages.find((x) => x.id === pageId); if (!p) return;
+      if (delta > 0 && p.slots.length < 12) p.slots.push(Store.makeSlot());
+      if (delta < 0 && p.slots.length > 1) p.slots.pop();
+    });
+  }
+
+  /* ============================================================
+     TAB: FIGURINHAS
+     ============================================================ */
+  function renderStickersTab(body, s) {
+    const grid = el('div', { class: 'grid gap-6 lg:grid-cols-5' });
+
+    // creator form (left, 2 cols)
+    const form = el('div', { class: 'lg:col-span-2' }, [stickerCreator()]);
+    grid.appendChild(form);
+
+    // list (right, 3 cols)
+    const right = el('div', { class: 'lg:col-span-3' });
+    const head = el('div', { class: 'mb-4 flex items-center justify-between' }, [
+      el('h3', { class: 'font-display text-lg font-bold' }, `Coleção (${s.stickers.length})`),
+      s.stickers.length ? el('button', { class: 'btn-secondary text-sm', onclick: clearAll }, '🗑 Limpar tudo') : null,
+    ]);
+    right.appendChild(head);
+
+    if (!s.stickers.length) {
+      right.appendChild(el('div', { class: 'glass-soft rounded-2xl p-10 text-center text-slate-400' },
+        '✨ Nenhuma figurinha ainda. Crie a primeira no painel ao lado!'));
+    } else {
+      const list = el('div', { class: 'card-grid' });
+      s.stickers.forEach((st) => list.appendChild(stickerListItem(st)));
+      window.UI.bindHolo(list);
+      right.appendChild(list);
+    }
+    grid.appendChild(right);
+    body.appendChild(grid);
+  }
+
+  function stickerListItem(st) {
+    const card = window.Stickers.render(st, { showStats: true });
+    const overlay = el('div', { class: 'absolute inset-0 z-10 flex items-end justify-center gap-1 rounded-2xl bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 transition group-hover:opacity-100' }, [
+      el('button', { class: 'ghost-btn !h-8 !w-8', title: 'Editar', onclick: (e) => { e.stopPropagation(); openEdit(st); } }, '✏'),
+      el('button', { class: 'ghost-btn !h-8 !w-8 !text-rose-300', title: 'Excluir', onclick: (e) => { e.stopPropagation(); removeSticker(st.id); } }, '🗑'),
+    ]);
+    return el('div', { class: 'group relative' }, [card, overlay]);
+  }
+
+  /* Creator form state (transient draft) */
+  let draft = newDraft();
+  function newDraft() {
+    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal' };
+  }
+
+  function stickerCreator(editing) {
+    const d = editing || draft;
+    const photoBox = el('div');
+    function renderPhotoBox() {
+      clear(photoBox);
+      if (d.photo) {
+        photoBox.appendChild(el('div', { class: 'relative' }, [
+          el('img', { src: d.photo, class: 'h-40 w-full rounded-xl object-cover' }),
+          el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8', onclick: () => { d.photo = ''; renderPhotoBox(); livePreview(); } }, '×'),
+        ]));
+      } else {
+        photoBox.appendChild(dropzone({
+          icon: '🧑', label: 'Foto do jogador / amigo',
+          onImage: (url) => { d.photo = url; renderPhotoBox(); livePreview(); },
+        }));
+      }
+    }
+    renderPhotoBox();
+
+    const previewWrap = el('div', { class: 'mx-auto w-40' });
+    function livePreview() {
+      clear(previewWrap);
+      previewWrap.appendChild(window.Stickers.render({ ...d, number: '00' }, { showStats: true }));
+      window.UI.bindHolo(previewWrap);
+    }
+
+    function bindLive(field) { return (v) => { d[field] = v; livePreview(); }; }
+
+    const rarityButtons = el('div', { class: 'grid grid-cols-3 gap-2' }, Object.keys(RARITIES).map((key) =>
+      el('button', {
+        class: 'btn-secondary !px-2 !py-2 text-xs ' + (d.type === key ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
+        onclick: () => {
+          d.type = key;
+          // re-render rarity buttons selection state
+          Array.from(rarityButtons.children).forEach((b, i) => {
+            b.classList.toggle('!border-fuchsia-400', Object.keys(RARITIES)[i] === key);
+            b.classList.toggle('ring-2', Object.keys(RARITIES)[i] === key);
+            b.classList.toggle('ring-fuchsia-400/40', Object.keys(RARITIES)[i] === key);
+          });
+          livePreview();
+        },
+      }, RARITIES[key].label)
+    ));
+
+    const panelChildren = [
+      el('div', { class: 'mb-4 flex items-center justify-between' }, [
+        el('h3', { class: 'font-display text-lg font-bold' }, editing ? '✏ Editar figurinha' : '🃏 Criar figurinha'),
+      ]),
+      el('div', { class: 'mb-4' }, previewWrap),
+
+      labeled('Tipo / Raridade', rarityButtons),
+      el('div', { class: 'my-4 border-t border-white/10' }),
+
+      el('p', { class: 'mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400' }, '① Foto personalizada'),
+      photoBox,
+
+      el('p', { class: 'mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400' }, '② Ficha técnica'),
+      labeled('Nome', input(d.name, bindLive('name'), 'Ex: Neymar Jr.')),
+      el('div', { class: 'grid grid-cols-2 gap-3' }, [
+        labeled('Data de nascimento', input(d.dob, bindLive('dob'), '', 'date')),
+        labeled('Time', input(d.team, bindLive('team'), 'Ex: Santos FC')),
+      ]),
+      el('div', { class: 'grid grid-cols-2 gap-3' }, [
+        labeled('Peso', input(d.weight, bindLive('weight'), 'Ex: 68 kg')),
+        labeled('Altura', input(d.height, bindLive('height'), 'Ex: 1,75 m')),
+      ]),
+    ];
+
+    if (editing) {
+      panelChildren.push(el('div', { class: 'mt-5 flex gap-2' }, [
+        el('button', { class: 'btn-secondary flex-1', onclick: () => window.App.rerender() }, 'Cancelar'),
+        el('button', { class: 'btn-primary flex-1', onclick: () => saveEdit(editing) }, '💾 Salvar'),
+      ]));
+    } else {
+      panelChildren.push(el('button', { class: 'btn-primary mt-5 w-full', onclick: () => createSticker(d) }, '＋ Adicionar à coleção'));
+    }
+
+    livePreview();
+    return panel(null, panelChildren);
+  }
+
+  function createSticker(d) {
+    if (!d.name.trim()) { toast('Dê um nome à figurinha', 'error'); return; }
+    Store.update((st) => {
+      st.stickers.push({ id: Store.uid('stk'), number: st._seq++, ...d, name: d.name.trim() });
+    });
+    draft = newDraft();
+    toast('Figurinha criada! ✨', 'success');
+    window.App.rerender();
+  }
+
+  function openEdit(st) {
+    const m = modal([stickerCreator({ ...st })], { size: 'max-w-md' });
+    // override the save/cancel to also close modal
+    editModalRef = m;
+    function patch() {}
+  }
+  let editModalRef = null;
+  function saveEdit(edited) {
+    if (!edited.name.trim()) { toast('Nome obrigatório', 'error'); return; }
+    Store.update((st) => {
+      const i = st.stickers.findIndex((x) => x.id === edited.id);
+      if (i >= 0) st.stickers[i] = { ...st.stickers[i], ...edited, name: edited.name.trim() };
+    });
+    if (editModalRef) editModalRef.close();
+    toast('Atualizada!', 'success');
+    window.App.rerender();
+  }
+
+  function removeSticker(id) {
+    confirm('Excluir esta figurinha? Ela será removida dos slots vinculados.', () => {
+      Store.update((st) => {
+        st.stickers = st.stickers.filter((x) => x.id !== id);
+        st.album.pages.forEach((p) => p.slots.forEach((sl) => { if (sl.stickerId === id) sl.stickerId = null; }));
+        delete st.player.owned[id];
+        for (const k in st.player.placed) if (st.player.placed[k] === id) delete st.player.placed[k];
+      });
+    }, { yes: 'Excluir' });
+  }
+
+  function clearAll() {
+    confirm('Apagar TODAS as figurinhas?', () => {
+      Store.update((st) => {
+        st.stickers = [];
+        st.album.pages.forEach((p) => p.slots.forEach((sl) => sl.stickerId = null));
+        st.player.owned = {}; st.player.placed = {};
+      });
+    }, { yes: 'Apagar tudo' });
+  }
+
+  /* ============================================================
+     TAB: PACOTE
+     ============================================================ */
+  function renderPackTab(body, s) {
+    const grid = el('div', { class: 'grid gap-6 lg:grid-cols-2' });
+
+    const form = panel('Configuração do Pacotinho', [
+      labeled('Nome do pacote', input(s.pack.name, (v) => Store.update((st) => { st.pack.name = v; }))),
+      el('div', { class: 'grid grid-cols-2 gap-3' }, [
+        labeled('Cor 1', colorInput(s.pack.color1, (v) => Store.update((st) => { st.pack.color1 = v; }))),
+        labeled('Cor 2', colorInput(s.pack.color2, (v) => Store.update((st) => { st.pack.color2 = v; }))),
+      ]),
+      labeled('Logo / Emoji', logoPicker(s)),
+      labeled(`Figurinhas por pacote: ${s.pack.perPack}`, slider(s)),
+      el('p', { class: 'text-xs text-slate-400' }, 'Dica: pacotes com mais figurinhas completam o álbum mais rápido, mas tornam o jogo menos desafiador.'),
+    ]);
+    grid.appendChild(form);
+
+    // preview
+    const previewWrap = el('div');
+    function buildPreview() {
+      const st = Store.get();
+      clear(previewWrap);
+      previewWrap.appendChild(panel('Pré-visualização', [
+        el('div', { class: 'flex flex-col items-center gap-4 py-4' }, [
+          packVisual(st.pack),
+          el('p', { class: 'font-display text-lg font-bold' }, st.pack.name),
+          el('p', { class: 'text-sm text-slate-400' }, st.pack.perPack + ' figurinhas por pacote'),
+        ]),
+      ]));
+    }
+    buildPreview();
+    Store.subscribe(buildPreview); // refresh preview on changes (light)
+    grid.appendChild(previewWrap);
+
+    body.appendChild(grid);
+  }
+
+  function packVisual(pack) {
+    return el('div', {
+      class: 'pack3d animate-floaty',
+      style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}`,
+    }, [
+      el('div', { class: 'pack3d__strip' }),
+      el('div', { class: 'pack3d__logo' }, pack.logo),
+    ]);
+  }
+
+  function logoPicker(s) {
+    const emojis = ['⭐', '⚽', '🏆', '🔥', '👑', '💎', '🎴', '🚀', '🦁', '🐍'];
+    return el('div', { class: 'flex flex-wrap gap-2' }, emojis.map((e) =>
+      el('button', {
+        class: 'ghost-btn ' + (s.pack.logo === e ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
+        onclick: () => Store.update((st) => { st.pack.logo = e; }),
+      }, e)
+    ));
+  }
+
+  function slider(s) {
+    const out = el('input', { type: 'range', min: '2', max: '8', value: String(s.pack.perPack), class: 'w-full accent-fuchsia-500' });
+    out.addEventListener('input', (e) => {
+      Store.update((st) => { st.pack.perPack = parseInt(e.target.value, 10); }, { silent: true });
+      const lbl = out.closest('.field-block')?.querySelector('.field-label');
+      if (lbl) lbl.textContent = `Figurinhas por pacote: ${e.target.value}`;
+    });
+    return out;
+  }
+
+  /* ============================================================
+     shared form builders
+     ============================================================ */
+  function panel(title, children) {
+    const kids = title ? [el('h3', { class: 'mb-4 font-display text-lg font-bold' }, title)] : [];
+    return el('div', { class: 'glass rounded-2xl p-5' }, kids.concat(flatten(children)));
+  }
+  function flatten(children) { return Array.isArray(children) ? children : [children]; }
+
+  function labeled(label, control) {
+    return el('div', { class: 'field-block mb-3' }, [
+      el('label', { class: 'field-label' }, label),
+      control,
+    ]);
+  }
+  function input(value, onChange, placeholder, type) {
+    const node = el('input', { class: 'field', value: value || '', placeholder: placeholder || '', type: type || 'text' });
+    node.addEventListener('input', (e) => onChange(e.target.value));
+    return node;
+  }
+  function textarea(value, onChange) {
+    const node = el('textarea', { class: 'field', rows: '3' });
+    node.value = value || '';
+    node.addEventListener('input', (e) => onChange(e.target.value));
+    return node;
+  }
+  function colorInput(value, onChange) {
+    const node = el('input', { type: 'color', value: value, class: 'h-10 w-full rounded-lg bg-transparent' });
+    node.addEventListener('input', (e) => onChange(e.target.value));
+    return node;
+  }
+  function imageField(label, current, onImage, onClear) {
+    if (current) {
+      return labeled(label, el('div', { class: 'relative' }, [
+        el('img', { src: current, class: 'h-32 w-full rounded-xl object-cover' }),
+        el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8', onclick: onClear }, '×'),
+      ]));
+    }
+    return labeled(label, dropzone({ onImage, label: 'Imagem de fundo' }));
+  }
+
+  window.Editor = { render };
+})();
