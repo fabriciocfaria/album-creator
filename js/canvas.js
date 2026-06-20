@@ -150,20 +150,34 @@
     document.getElementById('modal-root').appendChild(overlay);
 
     /* ---------- rendering ---------- */
+    let nodeMap = {};
     function renderStage() {
       clear(stage);
+      nodeMap = {};
       stage.setAttribute('style', bgStyle(design.bg) + ';container-type:size;');
       design.els.forEach((elm) => {
         const node = elementNode(elm, {});
         node.classList.add('cv-el--edit');
-        if (elm.id === selectedId) node.classList.add('cv-selected');
+        nodeMap[elm.id] = node;
         bindDrag(node, elm);
-        if (elm.id === selectedId) addHandles(node, elm);
+        if (elm.id === selectedId) { node.classList.add('cv-selected'); addHandles(node, elm); }
         stage.appendChild(node);
       });
     }
+    /* rebuild stage after a structural change (add/remove/reorder) */
+    function rebuild(newSelected) { if (newSelected !== undefined) selectedId = newSelected; renderStage(); renderProps(); }
 
-    function select(id) { selectedId = id; renderStage(); renderProps(); }
+    /* lightweight selection — does NOT rebuild the stage (so drag survives) */
+    function select(id) {
+      if (selectedId === id) { renderProps(); return; }
+      const prev = nodeMap[selectedId];
+      if (prev) { prev.classList.remove('cv-selected'); prev.querySelectorAll('.cv-handle').forEach((h) => h.remove()); }
+      selectedId = id;
+      const cur = nodeMap[id];
+      const elm = design.els.find((x) => x.id === id);
+      if (cur && elm) { cur.classList.add('cv-selected'); addHandles(cur, elm); }
+      renderProps();
+    }
     function deselectIfBlank(e) { if (e.target === stage) select(null); }
     stage.addEventListener('pointerdown', deselectIfBlank);
 
@@ -172,20 +186,22 @@
       node.addEventListener('pointerdown', (e) => {
         if (e.target.closest('.cv-handle')) return; // handled separately
         e.stopPropagation();
-        select(elm.id);
+        e.preventDefault();
+        select(elm.id); // lightweight — node persists, so drag keeps working
         const rect = stage.getBoundingClientRect();
         const sx = e.clientX, sy = e.clientY, ex = elm.x, ey = elm.y;
-        node.setPointerCapture(e.pointerId);
+        try { node.setPointerCapture(e.pointerId); } catch (err) {}
         function move(ev) {
           const dx = ((ev.clientX - sx) / rect.width) * 100;
           const dy = ((ev.clientY - sy) / rect.height) * 100;
-          elm.x = clamp(ex + dx, -5, 100 - elm.w + 5);
-          elm.y = clamp(ey + dy, -5, 100 - elm.h + 5);
+          elm.x = clamp(ex + dx, -10, 100 - 5);
+          elm.y = clamp(ey + dy, -10, 100 - 5);
           node.style.left = elm.x + '%'; node.style.top = elm.y + '%';
         }
-        function up(ev) { node.releasePointerCapture(e.pointerId); node.removeEventListener('pointermove', move); node.removeEventListener('pointerup', up); }
+        function up() { try { node.releasePointerCapture(e.pointerId); } catch (err) {} node.removeEventListener('pointermove', move); node.removeEventListener('pointerup', up); node.removeEventListener('pointercancel', up); }
         node.addEventListener('pointermove', move);
         node.addEventListener('pointerup', up);
+        node.addEventListener('pointercancel', up);
       });
     }
 
@@ -194,32 +210,34 @@
       const rh = el('div', { class: 'cv-handle cv-handle--resize', title: 'Redimensionar' }, '⤡');
       rh.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
+        e.preventDefault();
         const rect = stage.getBoundingClientRect();
         const sx = e.clientX, sy = e.clientY, ew = elm.w, eh = elm.h;
-        rh.setPointerCapture(e.pointerId);
+        try { rh.setPointerCapture(e.pointerId); } catch (err) {}
         function move(ev) {
           const dw = ((ev.clientX - sx) / rect.width) * 100;
           const dh = ((ev.clientY - sy) / rect.height) * 100;
-          elm.w = clamp(ew + dw, 5, 120);
-          elm.h = clamp(eh + dh, 5, 120);
+          elm.w = clamp(ew + dw, 5, 130);
+          elm.h = clamp(eh + dh, 5, 130);
           node.style.width = elm.w + '%'; node.style.height = elm.h + '%';
         }
-        function up() { rh.releasePointerCapture(e.pointerId); rh.removeEventListener('pointermove', move); rh.removeEventListener('pointerup', up); }
-        rh.addEventListener('pointermove', move); rh.addEventListener('pointerup', up);
+        function up() { try { rh.releasePointerCapture(e.pointerId); } catch (err) {} rh.removeEventListener('pointermove', move); rh.removeEventListener('pointerup', up); rh.removeEventListener('pointercancel', up); }
+        rh.addEventListener('pointermove', move); rh.addEventListener('pointerup', up); rh.addEventListener('pointercancel', up);
       });
-      // delete (top-right)
-      const dl = el('div', { class: 'cv-handle cv-handle--del', title: 'Excluir', onclick: (e) => { e.stopPropagation(); removeEl(elm.id); } }, '×');
+      // delete (top-right) — use pointerup so it also fires reliably on touch
+      const dl = el('div', { class: 'cv-handle cv-handle--del', title: 'Excluir' }, '×');
+      dl.addEventListener('pointerup', (e) => { e.stopPropagation(); e.preventDefault(); removeEl(elm.id); });
       node.appendChild(rh); node.appendChild(dl);
     }
 
     /* ---------- element ops ---------- */
-    function addEl(elm) { design.els.push(elm); select(elm.id); }
-    function removeEl(id) { design.els = design.els.filter((x) => x.id !== id); select(null); }
+    function addEl(elm) { design.els.push(elm); rebuild(elm.id); }
+    function removeEl(id) { design.els = design.els.filter((x) => x.id !== id); rebuild(selectedId === id ? null : selectedId); toast('Elemento removido', 'info'); }
     function duplicateEl(elm) { const c = JSON.parse(JSON.stringify(elm)); c.id = uid(); c.x = clamp(c.x + 5, 0, 90); c.y = clamp(c.y + 5, 0, 90); addEl(c); }
     function layer(elm, dir) {
       const i = design.els.indexOf(elm); if (i < 0) return;
       const j = i + dir; if (j < 0 || j >= design.els.length) return;
-      design.els.splice(i, 1); design.els.splice(j, 0, elm); renderStage(); renderProps();
+      design.els.splice(i, 1); design.els.splice(j, 0, elm); rebuild(selectedId);
     }
 
     function addText() { addEl({ id: uid(), type: 'text', x: 25, y: 40, w: 50, h: 14, rot: 0, text: 'Seu texto', color: '#ffffff', font: FONTS[0].v, weight: '700', size: 8, align: 'center', shadow: true }); }
