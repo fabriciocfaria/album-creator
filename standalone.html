@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Album Creator · Criador e Colecionador de Figurinhas</title>
+  <meta name="description" content="Crie, configure e colecione seu próprio álbum de figurinhas com pacotinhos, raridades e animações premium." />
+
+  <!-- Tailwind CSS (Play CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+            body: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          keyframes: {
+            floaty: {
+              '0%,100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-8px)' },
+            },
+            shimmer: {
+              '0%': { backgroundPosition: '-200% 0' },
+              '100%': { backgroundPosition: '200% 0' },
+            },
+          },
+          animation: {
+            floaty: 'floaty 6s ease-in-out infinite',
+            shimmer: 'shimmer 2.5s linear infinite',
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Cinzel:wght@600;700;900&display=swap" rel="stylesheet" />
+
+  <style>
+/* ============================================================
+   Album Creator — Custom styles
+   Glassmorphism, dynamic gradients, holographic cards, themes
+   ============================================================ */
+
+:root {
+  --bg-1: #0b1026;
+  --bg-2: #1a0b2e;
+  --bg-3: #06122b;
+  --accent: #d946ef;
+  --accent-2: #6366f1;
+}
+
+html { scroll-behavior: smooth; }
+body { background: var(--bg-1); }
+
+/* ---- Animated backdrop ---- */
+#app-backdrop {
+  background:
+    radial-gradient(1100px 600px at 12% -8%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 60%),
+    radial-gradient(1000px 700px at 90% 0%, color-mix(in srgb, var(--accent-2) 26%, transparent), transparent 60%),
+    radial-gradient(900px 700px at 50% 120%, rgba(56,189,248,.18), transparent 60%),
+    linear-gradient(160deg, var(--bg-1), var(--bg-2) 55%, var(--bg-3));
+  background-size: 200% 200%;
+  animation: bgshift 18s ease-in-out infinite;
+}
+@keyframes bgshift {
+  0%,100% { background-position: 0% 50%, 100% 0%, 50% 100%, 0% 0%; }
+  50%     { background-position: 30% 30%, 70% 20%, 40% 80%, 100% 100%; }
+}
+
+/* ---- Glass surfaces ---- */
+.glass {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 10px 40px -12px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.glass-soft {
+  background: rgba(255,255,255,.045);
+  border: 1px solid rgba(255,255,255,.09);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ---- Buttons ---- */
+.nav-tab {
+  padding: .4rem .9rem; border-radius: .6rem; font-size: .85rem; font-weight: 600;
+  color: rgb(203 213 225 / .85); transition: all .2s ease;
+}
+.nav-tab:hover { color: white; background: rgba(255,255,255,.06); }
+.nav-tab.active {
+  color: white;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 6px 18px -6px var(--accent);
+}
+.ghost-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 2.25rem; width: 2.25rem; border-radius: .65rem;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+  transition: all .2s ease; font-size: 1rem;
+}
+.ghost-btn:hover { background: rgba(255,255,255,.14); transform: translateY(-1px); }
+
+.btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .7rem 1.3rem; border-radius: .85rem; font-weight: 600; color: white;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 12px 30px -10px var(--accent); transition: all .2s ease;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 18px 40px -10px var(--accent); }
+.btn-primary:active { transform: translateY(0); }
+.btn-secondary {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .7rem 1.3rem; border-radius: .85rem; font-weight: 600; color: white;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
+  transition: all .2s ease;
+}
+.btn-secondary:hover { background: rgba(255,255,255,.16); transform: translateY(-1px); }
+
+.field {
+  width: 100%; padding: .6rem .8rem; border-radius: .7rem; color: white;
+  background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.14);
+  transition: border-color .2s, box-shadow .2s;
+}
+.field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.field-label { display:block; font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; color: rgb(148 163 184); margin-bottom:.35rem; font-weight:600; }
+
+/* ---- Dropzone ---- */
+.dropzone {
+  display:grid; place-items:center; text-align:center; gap:.4rem;
+  border: 2px dashed rgba(255,255,255,.22); border-radius: 1rem; padding: 1.5rem;
+  background: rgba(255,255,255,.03); cursor: pointer; transition: all .2s ease;
+}
+.dropzone:hover, .dropzone.drag { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+/* ============================================================
+   STICKER CARD
+   ============================================================ */
+.sticker {
+  position: relative; aspect-ratio: 3/4; border-radius: 14px; overflow: hidden;
+  background: linear-gradient(160deg, #1e293b, #0f172a);
+  border: 2px solid rgba(255,255,255,.18);
+  box-shadow: 0 14px 30px -14px rgba(0,0,0,.8);
+  transition: transform .25s ease, box-shadow .25s ease;
+  user-select: none;
+}
+.sticker:hover { transform: translateY(-4px); }
+.sticker__photo {
+  position:absolute; inset:0; background-size: cover; background-position: center top;
+}
+.sticker__photo--empty { display:grid; place-items:center; font-size:2.6rem; opacity:.4;
+  background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.12), transparent 60%); }
+.sticker__overlay {
+  position:absolute; inset:0;
+  background: linear-gradient(to top, rgba(0,0,0,.92) 4%, rgba(0,0,0,.35) 38%, transparent 62%);
+}
+.sticker__name {
+  position:absolute; left:8px; right:8px; bottom:24px;
+  font-family:'Space Grotesk',sans-serif; font-weight:700; line-height:1.05;
+  font-size: clamp(.7rem, 2.4vw, .95rem); text-shadow: 0 2px 6px rgba(0,0,0,.8);
+}
+.sticker__team {
+  position:absolute; left:8px; bottom:8px; font-size:.6rem; letter-spacing:.08em;
+  text-transform:uppercase; color: rgba(255,255,255,.75);
+}
+.sticker__num {
+  position:absolute; top:7px; left:7px; min-width:1.5rem; height:1.5rem; padding:0 .3rem;
+  display:grid; place-items:center; border-radius:.5rem; font-size:.7rem; font-weight:700;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(4px); border:1px solid rgba(255,255,255,.2);
+}
+.sticker__badge {
+  position:absolute; top:7px; right:7px; padding:.15rem .45rem; border-radius:.5rem;
+  font-size:.55rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase;
+  background: rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.25);
+}
+
+/* ---- Stats line ---- */
+.sticker__stats {
+  position:absolute; bottom:8px; right:8px; display:flex; gap:.3rem; font-size:.5rem; opacity:.85;
+}
+.sticker__stats span { background: rgba(0,0,0,.5); padding:.1rem .3rem; border-radius:.3rem; }
+
+/* ---- Rarity: NORMAL ---- */
+.sticker--normal { border-color: rgba(148,163,184,.5); }
+
+/* ---- Rarity: ESCUDO (crest/emblem shape) ---- */
+.sticker--escudo {
+  clip-path: polygon(50% 0, 100% 12%, 100% 62%, 50% 100%, 0 62%, 0 12%);
+  border-radius: 8px;
+  background: linear-gradient(160deg, #243b55, #141e30);
+  border-color: rgba(56,189,248,.6);
+}
+.sticker--escudo .sticker__name { bottom: 30px; text-align:center; left:0; right:0; padding:0 6px; }
+.sticker--escudo .sticker__num { top: 12px; }
+
+/* ---- Rarity: FWC (classic special edition) ---- */
+.sticker--fwc {
+  border: 3px solid #e2c275;
+  background: linear-gradient(160deg, #0c2340, #06121f);
+  box-shadow: 0 0 0 1px #0c2340, 0 14px 30px -12px rgba(226,194,117,.5);
+}
+.sticker--fwc::before {
+  content:''; position:absolute; inset:6px; border:1px solid rgba(226,194,117,.55);
+  border-radius:8px; pointer-events:none; z-index:3;
+}
+.sticker--fwc .sticker__badge { background:#e2c275; color:#06121f; border-color:#fff3; }
+
+/* ---- Rarity: SHINY / BRILHANTE (holographic) ---- */
+.sticker--shiny { border-color: rgba(255,255,255,.6); }
+.sticker--shiny .sticker__holo {
+  position:absolute; inset:0; z-index:2; mix-blend-mode: color-dodge; opacity:.55;
+  background:
+    linear-gradient(115deg, transparent 20%, rgba(255,0,128,.7), rgba(0,225,255,.7), rgba(120,255,80,.7), transparent 80%);
+  background-size: 300% 300%;
+  /* position reacts to mouse via --mx/--my custom props */
+  background-position: calc(var(--mx, 50%)) calc(var(--my, 50%));
+  transition: background-position .05s linear;
+}
+.sticker--shiny .sticker__holo2 {
+  position:absolute; inset:0; z-index:2; mix-blend-mode: overlay; opacity:.5;
+  background: repeating-linear-gradient(115deg, rgba(255,255,255,.16) 0 8px, transparent 8px 18px);
+  background-position: calc(var(--mx, 50%) * -1) center;
+}
+
+/* ---- Rarity: LEGEND (ultra premium gold) ---- */
+.sticker--legend {
+  border: 3px solid transparent;
+  background:
+    linear-gradient(#120d04, #120d04) padding-box,
+    linear-gradient(135deg, #fff1b8, #d4af37 30%, #8a6d1d 50%, #f7e08a 70%, #b8860b) border-box;
+  box-shadow: 0 0 30px -6px rgba(212,175,55,.55), 0 16px 34px -14px rgba(0,0,0,.9);
+}
+.sticker--legend .sticker__name { font-family:'Cinzel', serif; color:#ffe9a8; }
+.sticker--legend .sticker__badge {
+  background: linear-gradient(135deg,#f7e08a,#b8860b); color:#2a1d00; border-color:#fff6;
+}
+.sticker--legend .sticker__crown {
+  position:absolute; top:6px; left:50%; transform:translateX(-50%); z-index:3;
+  font-size:.9rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,.6));
+}
+.sticker--legend .sticker__holo {
+  position:absolute; inset:0; z-index:2; mix-blend-mode: overlay; opacity:.35;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,240,170,.9), transparent 70%);
+  background-size: 250% 250%;
+  background-position: var(--mx, 50%) var(--my, 50%);
+}
+
+/* glow ring for rare stickers in album grid */
+.rarity-glow-shiny { box-shadow: 0 0 0 2px rgba(255,255,255,.4), 0 0 22px -4px rgba(120,200,255,.7); }
+.rarity-glow-legend { box-shadow: 0 0 0 2px rgba(212,175,55,.6), 0 0 26px -2px rgba(212,175,55,.7); }
+
+/* ============================================================
+   FLIP CARD (pack opening)
+   ============================================================ */
+.flip { perspective: 1200px; }
+.flip__inner { position:relative; width:100%; height:100%; transition: transform .7s cubic-bezier(.2,.8,.2,1); transform-style: preserve-3d; }
+.flip.revealed .flip__inner { transform: rotateY(180deg); }
+.flip__face { position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:14px; }
+.flip__back { transform: rotateY(180deg); }
+.flip__cover {
+  display:grid; place-items:center; height:100%; border-radius:14px; cursor:pointer;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border:2px solid rgba(255,255,255,.3); box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+}
+.flip__cover span { font-size:2.4rem; animation: floaty 3s ease-in-out infinite; }
+
+/* ---- Slot ---- */
+.slot {
+  position:relative; aspect-ratio:3/4; border-radius:14px; border:2px dashed rgba(255,255,255,.22);
+  background: rgba(255,255,255,.03); display:grid; place-items:center; transition: all .2s;
+}
+.slot__hint { font-size:.6rem; text-align:center; color: rgba(255,255,255,.4); padding:.3rem; }
+.slot.can-paste { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); cursor:pointer; }
+.slot.can-paste:hover { transform: scale(1.03); }
+
+/* paste pop animation */
+@keyframes paste-pop { 0%{transform:scale(.4) rotate(-8deg); opacity:0;} 60%{transform:scale(1.08);} 100%{transform:scale(1); opacity:1;} }
+.paste-pop { animation: paste-pop .5s cubic-bezier(.2,.9,.3,1.2); }
+
+/* sparkle burst */
+@keyframes sparkle { 0%{transform:scale(0); opacity:1;} 100%{transform:scale(2.2); opacity:0;} }
+.sparkle { position:absolute; pointer-events:none; font-size:1.2rem; animation: sparkle .7s ease-out forwards; z-index:30; }
+
+/* ---- Pack visual ---- */
+.pack3d {
+  position:relative; width:170px; height:240px; border-radius:16px; margin:0 auto;
+  background: linear-gradient(150deg, var(--pack-c1,#d946ef), var(--pack-c2,#6366f1));
+  box-shadow: 0 24px 50px -18px rgba(0,0,0,.8), inset 0 2px 0 rgba(255,255,255,.4);
+  border:1px solid rgba(255,255,255,.3); overflow:hidden;
+}
+.pack3d::after {
+  content:''; position:absolute; top:0; left:-60%; width:40%; height:100%;
+  background: linear-gradient(115deg, transparent, rgba(255,255,255,.55), transparent);
+  animation: shimmer 3.5s linear infinite;
+}
+.pack3d__logo { position:absolute; inset:0; display:grid; place-items:center; font-size:2.4rem; }
+.pack3d__strip { position:absolute; top:18%; left:0; right:0; height:14px; background: rgba(0,0,0,.25); }
+
+@keyframes pack-rip { 0%{transform:rotate(0) scale(1);} 30%{transform:rotate(-4deg) scale(1.04);} 100%{transform:rotate(6deg) translateY(-40px) scale(.7); opacity:0;} }
+.pack-rip { animation: pack-rip .8s ease-in forwards; }
+
+/* book page flip-ish entrance */
+@keyframes page-in { from{opacity:0; transform: translateY(14px) rotateX(6deg);} to{opacity:1; transform:none;} }
+.page-in { animation: page-in .45s ease; }
+
+/* fade/scale-in util */
+@keyframes view-in { from{opacity:0; transform: translateY(10px);} to{opacity:1; transform:none;} }
+.view-in { animation: view-in .35s ease; }
+
+/* toast */
+.toast {
+  pointer-events:auto; padding:.65rem 1rem; border-radius:.8rem; font-weight:600; font-size:.85rem;
+  background: rgba(15,23,42,.9); border:1px solid rgba(255,255,255,.16); backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,.7); animation: view-in .25s ease;
+}
+
+/* modal */
+.modal-overlay { position:fixed; inset:0; z-index:50; display:grid; place-items:center; padding:1rem;
+  background: rgba(2,6,23,.7); backdrop-filter: blur(6px); animation: view-in .2s ease; }
+
+/* scrollbars */
+::-webkit-scrollbar { width:10px; height:10px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius:99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.28); }
+
+/* ============================================================
+   ALBUM THEMES — applied via [data-theme] on <body>
+   ============================================================ */
+/* Dark (default) handled by :root */
+
+body[data-theme="light"] {
+  --bg-1:#eef2ff; --bg-2:#f8fafc; --bg-3:#e0e7ff; --accent:#7c3aed; --accent-2:#2563eb;
+  color:#0f172a;
+}
+body[data-theme="light"] .glass { background: rgba(255,255,255,.7); border-color: rgba(15,23,42,.08); color:#0f172a; }
+body[data-theme="light"] .glass-soft { background: rgba(255,255,255,.6); border-color: rgba(15,23,42,.08); }
+body[data-theme="light"] .field { background: rgba(255,255,255,.8); border-color: rgba(15,23,42,.15); color:#0f172a; }
+body[data-theme="light"] .nav-tab { color:#475569; }
+body[data-theme="light"] .ghost-btn { background: rgba(15,23,42,.05); border-color: rgba(15,23,42,.12); }
+
+body[data-theme="neon"] {
+  --bg-1:#04010f; --bg-2:#0a0420; --bg-3:#001016; --accent:#22d3ee; --accent-2:#a855f7;
+}
+body[data-theme="neon"] .glass { border-color: rgba(34,211,238,.35); box-shadow: 0 0 30px -8px rgba(34,211,238,.35), inset 0 1px 0 rgba(255,255,255,.1); }
+
+body[data-theme="vintage"] {
+  --bg-1:#2b1d12; --bg-2:#3a2517; --bg-3:#1c130b; --accent:#c08a3e; --accent-2:#7c5a32;
+  color:#f5e9d6;
+}
+body[data-theme="vintage"] .glass { background: rgba(60,40,24,.45); border-color: rgba(192,138,62,.35); }
+body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color: rgba(192,138,62,.4); color:#f5e9d6; }
+
+/* helpers */
+.card-grid { display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); }
+.hidden-imp { display:none !important; }
+
+</style>
+</head>
+
+<body class="font-body antialiased min-h-screen text-slate-100 selection:bg-fuchsia-500/40">
+  <!-- Animated gradient backdrop -->
+  <div id="app-backdrop" class="fixed inset-0 -z-10"></div>
+
+  <!-- Top navigation -->
+  <header class="sticky top-0 z-40">
+    <nav class="glass mx-auto mt-3 flex max-w-7xl items-center justify-between gap-4 rounded-2xl px-4 py-3 sm:px-6">
+      <button id="nav-logo" class="group flex items-center gap-3">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-xl shadow-lg shadow-fuchsia-500/30 transition group-hover:scale-105">⚽</span>
+        <span class="hidden text-left sm:block">
+          <span class="block font-display text-lg font-bold leading-none">Album Creator</span>
+          <span class="block text-[11px] uppercase tracking-[0.25em] text-slate-400">stickers studio</span>
+        </span>
+      </button>
+
+      <div id="nav-tabs" class="flex items-center gap-1 rounded-xl bg-black/20 p-1">
+        <button data-mode="menu"   class="nav-tab">Menu</button>
+        <button data-mode="editor" class="nav-tab">Editor</button>
+        <button data-mode="player" class="nav-tab">Jogar</button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-save"  class="ghost-btn hidden sm:inline-flex" title="Salvar projeto">💾</button>
+        <button id="btn-reset" class="ghost-btn" title="Reiniciar projeto">↺</button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main view container -->
+  <main id="view" class="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6"></main>
+
+  <!-- Toast container -->
+  <div id="toast-root" class="pointer-events-none fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 flex-col items-center gap-2"></div>
+
+  <!-- Modal root -->
+  <div id="modal-root"></div>
+
+  <script>
+/* ===== js/state.js ===== */
+/* ============================================================
+   state.js — central app state, persistence, helpers
+   Exposed globally as window.Store
+   ============================================================ */
+(function () {
+  'use strict';
+
+  const STORAGE_KEY = 'album-creator:v1';
+
+  const RARITIES = {
+    normal: { label: 'Comum',      weight: 60, badge: 'BASE'   },
+    escudo: { label: 'Escudo',     weight: 14, badge: 'CREST'  },
+    fwc:    { label: 'FWC',        weight: 12, badge: 'FWC'    },
+    shiny:  { label: 'Brilhante',  weight: 10, badge: 'SHINE'  },
+    legend: { label: 'Legend',     weight: 4,  badge: 'LEGEND' },
+  };
+
+  const THEMES = ['dark', 'light', 'neon', 'vintage'];
+
+  function uid(prefix) {
+    return (prefix || 'id') + '-' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+  }
+
+  function makeSlot() {
+    return { id: uid('slot'), stickerId: null };
+  }
+
+  function makePage(slots) {
+    const count = slots || 6;
+    return { id: uid('page'), slots: Array.from({ length: count }, makeSlot) };
+  }
+
+  function defaultState() {
+    return {
+      mode: 'menu',
+      album: {
+        title: 'Meu Álbum 2026',
+        theme: 'dark',
+        cover: { title: 'COPA DOS CRAQUES', subtitle: 'Edição Oficial 2026', image: '' },
+        backCover: { text: 'Obrigado por colecionar! • Album Creator Studio', image: '' },
+        pages: [makePage(6), makePage(6)],
+      },
+      stickers: [],          // sticker definitions (the "checklist")
+      pack: { color1: '#d946ef', color2: '#6366f1', logo: '⭐', perPack: 5, name: 'Pacote Premium' },
+      player: {
+        coins: 200,
+        owned: {},           // { stickerId: count }
+        placed: {},          // { slotId: stickerId }
+        packsOpened: 0,
+      },
+      _seq: 1,               // sticker numbering
+    };
+  }
+
+  let state = load() || defaultState();
+
+  const listeners = new Set();
+  function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+  function notify() { listeners.forEach((fn) => fn(state)); }
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* quota */ }
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed;
+    } catch (e) { return null; }
+  }
+
+  /* Mutate helper: run fn, persist, notify */
+  function update(fn, opts) {
+    fn(state);
+    save();
+    if (!opts || opts.silent !== true) notify();
+  }
+
+  function reset() {
+    state = defaultState();
+    save();
+    notify();
+  }
+
+  function get() { return state; }
+
+  /* ---- derived helpers ---- */
+  function totalSlots() {
+    return state.album.pages.reduce((n, p) => n + p.slots.length, 0);
+  }
+  function stickerById(id) {
+    return state.stickers.find((s) => s.id === id) || null;
+  }
+  function ownedCount(id) {
+    return state.player.owned[id] || 0;
+  }
+  function placedCount() {
+    return Object.keys(state.player.placed).length;
+  }
+  function isPlaced(stickerId) {
+    return Object.values(state.player.placed).includes(stickerId);
+  }
+  /* how many of a sticker are duplicates (owned minus 1 if placed, etc.) */
+  function duplicates() {
+    const dups = [];
+    state.stickers.forEach((s) => {
+      const owned = ownedCount(s.id);
+      const placedOne = isPlaced(s.id) ? 1 : 0;
+      const spare = owned - placedOne;
+      if (spare > 0) dups.push({ sticker: s, count: spare });
+    });
+    return dups;
+  }
+  function completion() {
+    const total = state.stickers.length || 1;
+    const collected = state.stickers.filter((s) => ownedCount(s.id) > 0).length;
+    return { collected, total: state.stickers.length, pct: Math.round((collected / total) * 100) };
+  }
+
+  window.Store = {
+    STORAGE_KEY, RARITIES, THEMES,
+    uid, makeSlot, makePage,
+    get, update, reset, subscribe, save,
+    totalSlots, stickerById, ownedCount, placedCount, isPlaced, duplicates, completion,
+  };
+})();
+
+
+/* ===== js/ui.js ===== */
+/* ============================================================
+   ui.js — shared UI utilities: toast, modal, file→dataURL,
+   element builder, holographic mouse tracking
+   Exposed as window.UI
+   ============================================================ */
+(function () {
+  'use strict';
+
+  /* tiny DOM builder: el('div', {class:'x', onclick:fn}, [children|string]) */
+  function el(tag, attrs, children) {
+    const node = document.createElement(tag);
+    if (attrs) {
+      for (const k in attrs) {
+        const v = attrs[k];
+        if (v == null || v === false) continue;
+        if (k === 'class') node.className = v;
+        else if (k === 'html') node.innerHTML = v;
+        else if (k === 'style') node.setAttribute('style', v);
+        else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2).toLowerCase(), v);
+        else if (k === 'dataset') Object.assign(node.dataset, v);
+        else node.setAttribute(k, v);
+      }
+    }
+    appendChildren(node, children);
+    return node;
+  }
+  function appendChildren(node, children) {
+    if (children == null) return;
+    if (!Array.isArray(children)) children = [children];
+    children.forEach((c) => {
+      if (c == null || c === false) return;
+      node.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+    });
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); return node; }
+
+  /* ---- Toast ---- */
+  function toast(msg, kind) {
+    const root = document.getElementById('toast-root');
+    const colors = {
+      success: 'border-emerald-400/40 text-emerald-200',
+      error: 'border-rose-400/40 text-rose-200',
+      info: '',
+    };
+    const t = el('div', { class: 'toast ' + (colors[kind] || '') }, msg);
+    root.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateY(8px)'; t.style.transition = 'all .3s'; }, 2200);
+    setTimeout(() => t.remove(), 2600);
+  }
+
+  /* ---- Modal ---- */
+  function modal(content, opts) {
+    const root = document.getElementById('modal-root');
+    const card = el('div', { class: 'glass w-full max-w-lg rounded-2xl p-6 view-in ' + ((opts && opts.size) || '') });
+    appendChildren(card, content);
+    const overlay = el('div', {
+      class: 'modal-overlay',
+      onclick: (e) => { if (e.target === overlay && (!opts || opts.dismissable !== false)) close(); },
+    }, [card]);
+    function close() { overlay.remove(); }
+    root.appendChild(overlay);
+    return { close, card };
+  }
+
+  function confirm(message, onYes, opts) {
+    opts = opts || {};
+    const m = modal([
+      el('h3', { class: 'mb-2 font-display text-lg font-bold' }, opts.title || 'Confirmar'),
+      el('p', { class: 'mb-5 text-sm text-slate-300' }, message),
+      el('div', { class: 'flex justify-end gap-2' }, [
+        el('button', { class: 'btn-secondary', onclick: () => m.close() }, 'Cancelar'),
+        el('button', { class: 'btn-primary', onclick: () => { m.close(); onYes && onYes(); } }, opts.yes || 'Confirmar'),
+      ]),
+    ]);
+    return m;
+  }
+
+  /* ---- file → dataURL ---- */
+  function readImage(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.type.startsWith('image/')) return reject(new Error('Arquivo inválido'));
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* Build a styled dropzone with file input. onImage(dataURL) */
+  function dropzone(opts) {
+    opts = opts || {};
+    const input = el('input', { type: 'file', accept: 'image/*', class: 'hidden' });
+    const zone = el('label', { class: 'dropzone' }, [
+      el('div', { class: 'text-3xl' }, opts.icon || '📷'),
+      el('div', { class: 'text-sm font-semibold' }, opts.label || 'Arraste uma imagem ou clique'),
+      el('div', { class: 'text-xs text-slate-400' }, 'PNG, JPG · armazenado localmente'),
+      input,
+    ]);
+    async function handle(file) {
+      try { const url = await readImage(file); opts.onImage && opts.onImage(url); }
+      catch (e) { toast('Não foi possível ler a imagem', 'error'); }
+    }
+    input.addEventListener('change', (e) => e.target.files[0] && handle(e.target.files[0]));
+    ['dragover', 'dragenter'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('drag'); }));
+    zone.addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f) handle(f); });
+    return zone;
+  }
+
+  /* Holographic mouse tracking for shiny/legend cards inside a container */
+  function bindHolo(container) {
+    container.addEventListener('mousemove', (e) => {
+      const card = e.target.closest('.sticker--shiny, .sticker--legend');
+      if (!card) return;
+      const r = card.getBoundingClientRect();
+      const mx = ((e.clientX - r.left) / r.width) * 100;
+      const my = ((e.clientY - r.top) / r.height) * 100;
+      card.style.setProperty('--mx', mx + '%');
+      card.style.setProperty('--my', my + '%');
+      const rx = (my - 50) / 6, ry = (50 - mx) / 6;
+      card.style.transform = `perspective(700px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-4px)`;
+    });
+    container.addEventListener('mouseout', (e) => {
+      const card = e.target.closest('.sticker--shiny, .sticker--legend');
+      if (card) card.style.transform = '';
+    });
+  }
+
+  function sparkleBurst(x, y) {
+    const symbols = ['✨', '⭐', '💫', '🌟'];
+    for (let i = 0; i < 6; i++) {
+      const s = el('div', { class: 'sparkle' }, symbols[i % symbols.length]);
+      s.style.left = x + (Math.random() * 60 - 30) + 'px';
+      s.style.top = y + (Math.random() * 60 - 30) + 'px';
+      document.body.appendChild(s);
+      setTimeout(() => s.remove(), 800);
+    }
+  }
+
+  window.UI = { el, clear, appendChildren, toast, modal, confirm, readImage, dropzone, bindHolo, sparkleBurst };
+})();
+
+
+/* ===== js/stickers.js ===== */
+/* ============================================================
+   stickers.js — render a sticker card from its definition
+   Exposed as window.Stickers
+   ============================================================ */
+(function () {
+  'use strict';
+  const { el } = window.UI;
+  const { RARITIES } = window.Store;
+
+  /* Render a single sticker card element.
+     opts: { showStats:true, small:false } */
+  function render(sticker, opts) {
+    opts = opts || {};
+    const rar = RARITIES[sticker.type] || RARITIES.normal;
+
+    const photo = sticker.photo
+      ? el('div', { class: 'sticker__photo', style: `background-image:url('${sticker.photo}')` })
+      : el('div', { class: 'sticker__photo sticker__photo--empty' }, initials(sticker.name));
+
+    const layers = [photo, el('div', { class: 'sticker__overlay' })];
+
+    // Holographic layers for shiny + legend
+    if (sticker.type === 'shiny') {
+      layers.push(el('div', { class: 'sticker__holo' }));
+      layers.push(el('div', { class: 'sticker__holo2' }));
+    }
+    if (sticker.type === 'legend') {
+      layers.push(el('div', { class: 'sticker__holo' }));
+      layers.push(el('div', { class: 'sticker__crown' }, '👑'));
+    }
+
+    // Number badge
+    if (sticker.number != null) layers.push(el('div', { class: 'sticker__num' }, '#' + sticker.number));
+    // Rarity badge
+    layers.push(el('div', { class: 'sticker__badge' }, rar.badge));
+
+    // Name + team
+    layers.push(el('div', { class: 'sticker__name' }, sticker.name || 'Sem nome'));
+    if (sticker.team) layers.push(el('div', { class: 'sticker__team' }, sticker.team));
+
+    // Stats
+    if (opts.showStats !== false && (sticker.height || sticker.weight || sticker.dob)) {
+      const stats = [];
+      if (sticker.height) stats.push(el('span', {}, '📏 ' + sticker.height));
+      if (sticker.weight) stats.push(el('span', {}, '⚖ ' + sticker.weight));
+      if (stats.length) layers.push(el('div', { class: 'sticker__stats' }, stats));
+    }
+
+    const card = el('div', { class: 'sticker sticker--' + (sticker.type || 'normal') }, layers);
+    if (opts.onClick) card.addEventListener('click', opts.onClick);
+    return card;
+  }
+
+  function initials(name) {
+    if (!name) return '?';
+    return name.split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase() || '?';
+  }
+
+  /* Detailed front/back flip view used in modals (player card details) */
+  function detailCard(sticker) {
+    const wrap = el('div', { class: 'mx-auto w-56' });
+    wrap.appendChild(render(sticker, { showStats: true }));
+    window.UI.bindHolo(wrap);
+    const info = el('div', { class: 'mt-4 space-y-1 text-sm text-slate-300' }, [
+      sticker.team ? row('Time', sticker.team) : null,
+      sticker.dob ? row('Nascimento', formatDate(sticker.dob)) : null,
+      sticker.height ? row('Altura', sticker.height) : null,
+      sticker.weight ? row('Peso', sticker.weight) : null,
+      row('Raridade', (RARITIES[sticker.type] || RARITIES.normal).label),
+    ]);
+    wrap.appendChild(info);
+    return wrap;
+  }
+  function row(k, v) {
+    return el('div', { class: 'flex justify-between border-b border-white/10 py-1' }, [
+      el('span', { class: 'text-slate-400' }, k),
+      el('span', { class: 'font-semibold' }, v),
+    ]);
+  }
+  function formatDate(d) {
+    try { return new Date(d).toLocaleDateString('pt-BR'); } catch (e) { return d; }
+  }
+
+  window.Stickers = { render, detailCard, initials };
+})();
+
+
+/* ===== js/editor.js ===== */
+/* ============================================================
+   editor.js — MODO EDITOR
+   Tabs: Álbum (capa/contracapa/páginas/tema) · Figurinhas · Pacote
+   Exposed as window.Editor.render(container)
+   ============================================================ */
+(function () {
+  'use strict';
+  const { el, clear, toast, modal, confirm, dropzone } = window.UI;
+  const Store = window.Store;
+  const { RARITIES, THEMES } = Store;
+
+  let activeTab = 'album';
+
+  function render(container) {
+    const s = Store.get();
+    clear(container);
+
+    const header = el('div', { class: 'mb-6 flex flex-wrap items-center justify-between gap-4 view-in' }, [
+      el('div', {}, [
+        el('h1', { class: 'font-display text-2xl font-bold sm:text-3xl' }, '🎨 Modo Editor'),
+        el('p', { class: 'text-sm text-slate-400' }, 'Desenhe o álbum, crie figurinhas e configure os pacotinhos.'),
+      ]),
+      el('div', { class: 'glass-soft flex gap-1 rounded-xl p-1' }, [
+        tabBtn('album', '📔 Álbum'),
+        tabBtn('stickers', '🃏 Figurinhas'),
+        tabBtn('pack', '📦 Pacote'),
+      ]),
+    ]);
+    container.appendChild(header);
+
+    const body = el('div', { class: 'view-in' });
+    container.appendChild(body);
+
+    if (activeTab === 'album') renderAlbumTab(body, s);
+    else if (activeTab === 'stickers') renderStickersTab(body, s);
+    else renderPackTab(body, s);
+  }
+
+  function tabBtn(id, label) {
+    return el('button', {
+      class: 'nav-tab ' + (activeTab === id ? 'active' : ''),
+      onclick: () => { activeTab = id; window.App.rerender(); },
+    }, label);
+  }
+
+  /* ============================================================
+     TAB: ÁLBUM
+     ============================================================ */
+  function renderAlbumTab(body, s) {
+    const grid = el('div', { class: 'grid gap-6 lg:grid-cols-3' });
+
+    /* --- settings column --- */
+    const settings = el('div', { class: 'space-y-6 lg:col-span-1' });
+
+    // General
+    settings.appendChild(panel('Configurações Gerais', [
+      labeled('Título do álbum', input(s.album.title, (v) => Store.update((st) => { st.album.title = v; }, { silent: true }))),
+      labeled('Paleta de cores', themePicker(s)),
+    ]));
+
+    // Cover
+    settings.appendChild(panel('Capa', [
+      labeled('Título da capa', input(s.album.cover.title, (v) => Store.update((st) => { st.album.cover.title = v; }))),
+      labeled('Subtítulo', input(s.album.cover.subtitle, (v) => Store.update((st) => { st.album.cover.subtitle = v; }))),
+      imageField('Imagem de fundo da capa', s.album.cover.image,
+        (url) => Store.update((st) => { st.album.cover.image = url; }),
+        () => Store.update((st) => { st.album.cover.image = ''; })),
+    ]));
+
+    // Back cover
+    settings.appendChild(panel('Contracapa', [
+      labeled('Texto da contracapa', textarea(s.album.backCover.text, (v) => Store.update((st) => { st.album.backCover.text = v; }))),
+      imageField('Imagem de fundo da contracapa', s.album.backCover.image,
+        (url) => Store.update((st) => { st.album.backCover.image = url; }),
+        () => Store.update((st) => { st.album.backCover.image = ''; })),
+    ]));
+
+    grid.appendChild(settings);
+
+    /* --- preview + pages column --- */
+    const right = el('div', { class: 'space-y-6 lg:col-span-2' });
+
+    // Cover / back previews
+    right.appendChild(panel('Pré-visualização', [
+      el('div', { class: 'grid gap-4 sm:grid-cols-2' }, [
+        coverPreview(s.album.cover, 'front'),
+        coverPreview({ title: 'CONTRACAPA', subtitle: s.album.backCover.text, image: s.album.backCover.image }, 'back'),
+      ]),
+    ]));
+
+    // Pages manager
+    const pagesPanel = panel('Páginas & Slots', []);
+    const pagesHead = el('div', { class: 'mb-4 flex items-center justify-between' }, [
+      el('p', { class: 'text-sm text-slate-400' }, `${s.album.pages.length} páginas · ${Store.totalSlots()} slots no total`),
+      el('button', { class: 'btn-primary text-sm', onclick: addPage }, '＋ Nova página'),
+    ]);
+    pagesPanel.appendChild(pagesHead);
+
+    const pagesWrap = el('div', { class: 'space-y-5' });
+    s.album.pages.forEach((page, idx) => pagesWrap.appendChild(pageEditor(page, idx, s)));
+    pagesPanel.appendChild(pagesWrap);
+    right.appendChild(pagesPanel);
+
+    grid.appendChild(right);
+    body.appendChild(grid);
+  }
+
+  function themePicker(s) {
+    const labels = { dark: '🌙 Dark', light: '☀️ Light', neon: '🔮 Neon', vintage: '📜 Vintage' };
+    return el('div', { class: 'grid grid-cols-2 gap-2' }, THEMES.map((t) =>
+      el('button', {
+        class: 'btn-secondary text-sm ' + (s.album.theme === t ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
+        onclick: () => { Store.update((st) => { st.album.theme = t; }); window.App.applyTheme(); },
+      }, labels[t])
+    ));
+  }
+
+  function coverPreview(cover, side) {
+    const inner = el('div', {
+      class: 'relative flex h-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-white/20 p-6 text-center',
+      style: cover.image
+        ? `background-image:linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.65)),url('${cover.image}');background-size:cover;background-position:center;`
+        : 'background:linear-gradient(150deg,var(--accent),var(--accent-2));',
+    }, [
+      el('div', { class: 'text-3xl animate-floaty' }, side === 'front' ? '⚽' : '📖'),
+      el('h3', { class: 'font-display text-xl font-bold leading-tight drop-shadow' }, cover.title || '—'),
+      el('p', { class: 'text-xs text-white/80' }, cover.subtitle || ''),
+    ]);
+    return el('div', { class: 'aspect-[3/4] overflow-hidden rounded-2xl shadow-2xl' }, inner);
+  }
+
+  function pageEditor(page, idx, s) {
+    const slots = el('div', { class: 'grid grid-cols-3 gap-2 sm:grid-cols-6' },
+      page.slots.map((slot) => slotPreview(slot)));
+
+    const head = el('div', { class: 'mb-3 flex items-center justify-between' }, [
+      el('h4', { class: 'font-display font-semibold' }, `Página ${idx + 1}`),
+      el('div', { class: 'flex items-center gap-2' }, [
+        el('button', { class: 'ghost-btn', title: 'Remover slot', onclick: () => changeSlots(page.id, -1) }, '－'),
+        el('span', { class: 'text-xs text-slate-400' }, page.slots.length + ' slots'),
+        el('button', { class: 'ghost-btn', title: 'Adicionar slot', onclick: () => changeSlots(page.id, 1) }, '＋'),
+        el('button', { class: 'ghost-btn !text-rose-300', title: 'Excluir página', onclick: () => removePage(page.id) }, '🗑'),
+      ]),
+    ]);
+    return el('div', { class: 'glass-soft rounded-xl p-4 page-in' }, [head, slots]);
+  }
+
+  function slotPreview(slot) {
+    const s = Store.get();
+    const sticker = slot.stickerId ? Store.stickerById(slot.stickerId) : null;
+    if (sticker) {
+      return el('div', { class: 'relative' }, [
+        window.Stickers.render(sticker, { showStats: false }),
+        el('button', {
+          class: 'absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-xs',
+          title: 'Desvincular',
+          onclick: () => Store.update((st) => {
+            const sl = findSlot(st, slot.id); if (sl) sl.stickerId = null;
+          }),
+        }, '×'),
+      ]);
+    }
+    return el('div', { class: 'slot', onclick: () => assignStickerToSlot(slot.id) }, [
+      el('div', { class: 'slot__hint' }, '＋ vincular'),
+    ]);
+  }
+
+  function findSlot(st, slotId) {
+    for (const p of st.album.pages) { const sl = p.slots.find((x) => x.id === slotId); if (sl) return sl; }
+    return null;
+  }
+
+  /* Pick which sticker definition this slot expects (the album checklist) */
+  function assignStickerToSlot(slotId) {
+    const s = Store.get();
+    if (!s.stickers.length) { toast('Crie figurinhas primeiro na aba 🃏', 'info'); activeTab = 'stickers'; window.App.rerender(); return; }
+    const used = new Set(s.album.pages.flatMap((p) => p.slots.map((sl) => sl.stickerId).filter(Boolean)));
+    const list = el('div', { class: 'grid max-h-[55vh] grid-cols-3 gap-3 overflow-y-auto p-1 sm:grid-cols-4' });
+    const m = modal([
+      el('h3', { class: 'mb-1 font-display text-lg font-bold' }, 'Vincular figurinha ao slot'),
+      el('p', { class: 'mb-4 text-sm text-slate-400' }, 'Escolha qual figurinha pertence a este espaço do álbum.'),
+      list,
+    ], { size: 'max-w-2xl' });
+    s.stickers.forEach((st) => {
+      const card = window.Stickers.render(st, { showStats: false });
+      const w = el('div', { class: 'cursor-pointer transition ' + (used.has(st.id) ? 'opacity-40' : 'hover:scale-105') }, [card]);
+      w.addEventListener('click', () => {
+        Store.update((state) => { const sl = findSlot(state, slotId); if (sl) sl.stickerId = st.id; });
+        m.close();
+      });
+      list.appendChild(w);
+    });
+    window.UI.bindHolo(list);
+  }
+
+  function addPage() { Store.update((st) => st.album.pages.push(Store.makePage(6))); }
+  function removePage(id) {
+    confirm('Excluir esta página e seus vínculos?', () =>
+      Store.update((st) => { st.album.pages = st.album.pages.filter((p) => p.id !== id); }), { yes: 'Excluir' });
+  }
+  function changeSlots(pageId, delta) {
+    Store.update((st) => {
+      const p = st.album.pages.find((x) => x.id === pageId); if (!p) return;
+      if (delta > 0 && p.slots.length < 12) p.slots.push(Store.makeSlot());
+      if (delta < 0 && p.slots.length > 1) p.slots.pop();
+    });
+  }
+
+  /* ============================================================
+     TAB: FIGURINHAS
+     ============================================================ */
+  function renderStickersTab(body, s) {
+    const grid = el('div', { class: 'grid gap-6 lg:grid-cols-5' });
+
+    // creator form (left, 2 cols)
+    const form = el('div', { class: 'lg:col-span-2' }, [stickerCreator()]);
+    grid.appendChild(form);
+
+    // list (right, 3 cols)
+    const right = el('div', { class: 'lg:col-span-3' });
+    const head = el('div', { class: 'mb-4 flex items-center justify-between' }, [
+      el('h3', { class: 'font-display text-lg font-bold' }, `Coleção (${s.stickers.length})`),
+      s.stickers.length ? el('button', { class: 'btn-secondary text-sm', onclick: clearAll }, '🗑 Limpar tudo') : null,
+    ]);
+    right.appendChild(head);
+
+    if (!s.stickers.length) {
+      right.appendChild(el('div', { class: 'glass-soft rounded-2xl p-10 text-center text-slate-400' },
+        '✨ Nenhuma figurinha ainda. Crie a primeira no painel ao lado!'));
+    } else {
+      const list = el('div', { class: 'card-grid' });
+      s.stickers.forEach((st) => list.appendChild(stickerListItem(st)));
+      window.UI.bindHolo(list);
+      right.appendChild(list);
+    }
+    grid.appendChild(right);
+    body.appendChild(grid);
+  }
+
+  function stickerListItem(st) {
+    const card = window.Stickers.render(st, { showStats: true });
+    const overlay = el('div', { class: 'absolute inset-0 z-10 flex items-end justify-center gap-1 rounded-2xl bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 transition group-hover:opacity-100' }, [
+      el('button', { class: 'ghost-btn !h-8 !w-8', title: 'Editar', onclick: (e) => { e.stopPropagation(); openEdit(st); } }, '✏'),
+      el('button', { class: 'ghost-btn !h-8 !w-8 !text-rose-300', title: 'Excluir', onclick: (e) => { e.stopPropagation(); removeSticker(st.id); } }, '🗑'),
+    ]);
+    return el('div', { class: 'group relative' }, [card, overlay]);
+  }
+
+  /* Creator form state (transient draft) */
+  let draft = newDraft();
+  function newDraft() {
+    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal' };
+  }
+
+  function stickerCreator(editing) {
+    const d = editing || draft;
+    const photoBox = el('div');
+    function renderPhotoBox() {
+      clear(photoBox);
+      if (d.photo) {
+        photoBox.appendChild(el('div', { class: 'relative' }, [
+          el('img', { src: d.photo, class: 'h-40 w-full rounded-xl object-cover' }),
+          el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8', onclick: () => { d.photo = ''; renderPhotoBox(); livePreview(); } }, '×'),
+        ]));
+      } else {
+        photoBox.appendChild(dropzone({
+          icon: '🧑', label: 'Foto do jogador / amigo',
+          onImage: (url) => { d.photo = url; renderPhotoBox(); livePreview(); },
+        }));
+      }
+    }
+    renderPhotoBox();
+
+    const previewWrap = el('div', { class: 'mx-auto w-40' });
+    function livePreview() {
+      clear(previewWrap);
+      previewWrap.appendChild(window.Stickers.render({ ...d, number: '00' }, { showStats: true }));
+      window.UI.bindHolo(previewWrap);
+    }
+
+    function bindLive(field) { return (v) => { d[field] = v; livePreview(); }; }
+
+    const rarityButtons = el('div', { class: 'grid grid-cols-3 gap-2' }, Object.keys(RARITIES).map((key) =>
+      el('button', {
+        class: 'btn-secondary !px-2 !py-2 text-xs ' + (d.type === key ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
+        onclick: () => {
+          d.type = key;
+          // re-render rarity buttons selection state
+          Array.from(rarityButtons.children).forEach((b, i) => {
+            b.classList.toggle('!border-fuchsia-400', Object.keys(RARITIES)[i] === key);
+            b.classList.toggle('ring-2', Object.keys(RARITIES)[i] === key);
+            b.classList.toggle('ring-fuchsia-400/40', Object.keys(RARITIES)[i] === key);
+          });
+          livePreview();
+        },
+      }, RARITIES[key].label)
+    ));
+
+    const panelChildren = [
+      el('div', { class: 'mb-4 flex items-center justify-between' }, [
+        el('h3', { class: 'font-display text-lg font-bold' }, editing ? '✏ Editar figurinha' : '🃏 Criar figurinha'),
+      ]),
+      el('div', { class: 'mb-4' }, previewWrap),
+
+      labeled('Tipo / Raridade', rarityButtons),
+      el('div', { class: 'my-4 border-t border-white/10' }),
+
+      el('p', { class: 'mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400' }, '① Foto personalizada'),
+      photoBox,
+
+      el('p', { class: 'mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400' }, '② Ficha técnica'),
+      labeled('Nome', input(d.name, bindLive('name'), 'Ex: Neymar Jr.')),
+      el('div', { class: 'grid grid-cols-2 gap-3' }, [
+        labeled('Data de nascimento', input(d.dob, bindLive('dob'), '', 'date')),
+        labeled('Time', input(d.team, bindLive('team'), 'Ex: Santos FC')),
+      ]),
+      el('div', { class: 'grid grid-cols-2 gap-3' }, [
+        labeled('Peso', input(d.weight, bindLive('weight'), 'Ex: 68 kg')),
+        labeled('Altura', input(d.height, bindLive('height'), 'Ex: 1,75 m')),
+      ]),
+    ];
+
+    if (editing) {
+      panelChildren.push(el('div', { class: 'mt-5 flex gap-2' }, [
+        el('button', { class: 'btn-secondary flex-1', onclick: () => window.App.rerender() }, 'Cancelar'),
+        el('button', { class: 'btn-primary flex-1', onclick: () => saveEdit(editing) }, '💾 Salvar'),
+      ]));
+    } else {
+      panelChildren.push(el('button', { class: 'btn-primary mt-5 w-full', onclick: () => createSticker(d) }, '＋ Adicionar à coleção'));
+    }
+
+    livePreview();
+    return panel(null, panelChildren);
+  }
+
+  function createSticker(d) {
+    if (!d.name.trim()) { toast('Dê um nome à figurinha', 'error'); return; }
+    Store.update((st) => {
+      st.stickers.push({ id: Store.uid('stk'), number: st._seq++, ...d, name: d.name.trim() });
+    });
+    draft = newDraft();
+    toast('Figurinha criada! ✨', 'success');
+    window.App.rerender();
+  }
+
+  function openEdit(st) {
+    const m = modal([stickerCreator({ ...st })], { size: 'max-w-md' });
+    // override the save/cancel to also close modal
+    editModalRef = m;
+    function patch() {}
+  }
+  let editModalRef = null;
+  function saveEdit(edited) {
+    if (!edited.name.trim()) { toast('Nome obrigatório', 'error'); return; }
+    Store.update((st) => {
+      const i = st.stickers.findIndex((x) => x.id === edited.id);
+      if (i >= 0) st.stickers[i] = { ...st.stickers[i], ...edited, name: edited.name.trim() };
+    });
+    if (editModalRef) editModalRef.close();
+    toast('Atualizada!', 'success');
+    window.App.rerender();
+  }
+
+  function removeSticker(id) {
+    confirm('Excluir esta figurinha? Ela será removida dos slots vinculados.', () => {
+      Store.update((st) => {
+        st.stickers = st.stickers.filter((x) => x.id !== id);
+        st.album.pages.forEach((p) => p.slots.forEach((sl) => { if (sl.stickerId === id) sl.stickerId = null; }));
+        delete st.player.owned[id];
+        for (const k in st.player.placed) if (st.player.placed[k] === id) delete st.player.placed[k];
+      });
+    }, { yes: 'Excluir' });
+  }
+
+  function clearAll() {
+    confirm('Apagar TODAS as figurinhas?', () => {
+      Store.update((st) => {
+        st.stickers = [];
+        st.album.pages.forEach((p) => p.slots.forEach((sl) => sl.stickerId = null));
+        st.player.owned = {}; st.player.placed = {};
+      });
+    }, { yes: 'Apagar tudo' });
+  }
+
+  /* ============================================================
+     TAB: PACOTE
+     ============================================================ */
+  function renderPackTab(body, s) {
+    const grid = el('div', { class: 'grid gap-6 lg:grid-cols-2' });
+
+    const form = panel('Configuração do Pacotinho', [
+      labeled('Nome do pacote', input(s.pack.name, (v) => Store.update((st) => { st.pack.name = v; }))),
+      el('div', { class: 'grid grid-cols-2 gap-3' }, [
+        labeled('Cor 1', colorInput(s.pack.color1, (v) => Store.update((st) => { st.pack.color1 = v; }))),
+        labeled('Cor 2', colorInput(s.pack.color2, (v) => Store.update((st) => { st.pack.color2 = v; }))),
+      ]),
+      labeled('Logo / Emoji', logoPicker(s)),
+      labeled(`Figurinhas por pacote: ${s.pack.perPack}`, slider(s)),
+      el('p', { class: 'text-xs text-slate-400' }, 'Dica: pacotes com mais figurinhas completam o álbum mais rápido, mas tornam o jogo menos desafiador.'),
+    ]);
+    grid.appendChild(form);
+
+    // preview
+    const previewWrap = el('div');
+    function buildPreview() {
+      const st = Store.get();
+      clear(previewWrap);
+      previewWrap.appendChild(panel('Pré-visualização', [
+        el('div', { class: 'flex flex-col items-center gap-4 py-4' }, [
+          packVisual(st.pack),
+          el('p', { class: 'font-display text-lg font-bold' }, st.pack.name),
+          el('p', { class: 'text-sm text-slate-400' }, st.pack.perPack + ' figurinhas por pacote'),
+        ]),
+      ]));
+    }
+    buildPreview();
+    Store.subscribe(buildPreview); // refresh preview on changes (light)
+    grid.appendChild(previewWrap);
+
+    body.appendChild(grid);
+  }
+
+  function packVisual(pack) {
+    return el('div', {
+      class: 'pack3d animate-floaty',
+      style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}`,
+    }, [
+      el('div', { class: 'pack3d__strip' }),
+      el('div', { class: 'pack3d__logo' }, pack.logo),
+    ]);
+  }
+
+  function logoPicker(s) {
+    const emojis = ['⭐', '⚽', '🏆', '🔥', '👑', '💎', '🎴', '🚀', '🦁', '🐍'];
+    return el('div', { class: 'flex flex-wrap gap-2' }, emojis.map((e) =>
+      el('button', {
+        class: 'ghost-btn ' + (s.pack.logo === e ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
+        onclick: () => Store.update((st) => { st.pack.logo = e; }),
+      }, e)
+    ));
+  }
+
+  function slider(s) {
+    const out = el('input', { type: 'range', min: '2', max: '8', value: String(s.pack.perPack), class: 'w-full accent-fuchsia-500' });
+    out.addEventListener('input', (e) => {
+      Store.update((st) => { st.pack.perPack = parseInt(e.target.value, 10); }, { silent: true });
+      const lbl = out.closest('.field-block')?.querySelector('.field-label');
+      if (lbl) lbl.textContent = `Figurinhas por pacote: ${e.target.value}`;
+    });
+    return out;
+  }
+
+  /* ============================================================
+     shared form builders
+     ============================================================ */
+  function panel(title, children) {
+    const kids = title ? [el('h3', { class: 'mb-4 font-display text-lg font-bold' }, title)] : [];
+    return el('div', { class: 'glass rounded-2xl p-5' }, kids.concat(flatten(children)));
+  }
+  function flatten(children) { return Array.isArray(children) ? children : [children]; }
+
+  function labeled(label, control) {
+    return el('div', { class: 'field-block mb-3' }, [
+      el('label', { class: 'field-label' }, label),
+      control,
+    ]);
+  }
+  function input(value, onChange, placeholder, type) {
+    const node = el('input', { class: 'field', value: value || '', placeholder: placeholder || '', type: type || 'text' });
+    node.addEventListener('input', (e) => onChange(e.target.value));
+    return node;
+  }
+  function textarea(value, onChange) {
+    const node = el('textarea', { class: 'field', rows: '3' });
+    node.value = value || '';
+    node.addEventListener('input', (e) => onChange(e.target.value));
+    return node;
+  }
+  function colorInput(value, onChange) {
+    const node = el('input', { type: 'color', value: value, class: 'h-10 w-full rounded-lg bg-transparent' });
+    node.addEventListener('input', (e) => onChange(e.target.value));
+    return node;
+  }
+  function imageField(label, current, onImage, onClear) {
+    if (current) {
+      return labeled(label, el('div', { class: 'relative' }, [
+        el('img', { src: current, class: 'h-32 w-full rounded-xl object-cover' }),
+        el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8', onclick: onClear }, '×'),
+      ]));
+    }
+    return labeled(label, dropzone({ onImage, label: 'Imagem de fundo' }));
+  }
+
+  window.Editor = { render };
+})();
+
+
+/* ===== js/player.js ===== */
+/* ============================================================
+   player.js — MODO JOGADOR
+   Sub-views: Banca (loja) · Álbum interativo · Repetidas
+   Exposed as window.Player.render(container)
+   ============================================================ */
+(function () {
+  'use strict';
+  const { el, clear, toast, modal, sparkleBurst } = window.UI;
+  const Store = window.Store;
+  const { RARITIES } = Store;
+
+  let view = 'shop';            // shop | album | dupes
+  let pendingPaste = null;      // stickerId queued to paste into album
+
+  function render(container) {
+    const s = Store.get();
+    clear(container);
+
+    if (!s.stickers.length) {
+      container.appendChild(emptyState());
+      return;
+    }
+
+    container.appendChild(playerHeader(s));
+
+    const body = el('div', { class: 'view-in' });
+    container.appendChild(body);
+    if (view === 'shop') renderShop(body, s);
+    else if (view === 'album') renderAlbum(body, s);
+    else renderDupes(body, s);
+  }
+
+  function emptyState() {
+    return el('div', { class: 'glass mx-auto mt-10 max-w-lg rounded-3xl p-10 text-center view-in' }, [
+      el('div', { class: 'mb-4 text-6xl animate-floaty' }, '🃏'),
+      el('h2', { class: 'mb-2 font-display text-2xl font-bold' }, 'Nenhuma figurinha no álbum'),
+      el('p', { class: 'mb-6 text-slate-400' }, 'Vá ao Modo Editor e crie figurinhas para poder colecioná-las aqui.'),
+      el('button', { class: 'btn-primary mx-auto', onclick: () => window.App.setMode('editor') }, '🎨 Abrir Editor'),
+    ]);
+  }
+
+  function playerHeader(s) {
+    const c = Store.completion();
+    return el('div', { class: 'mb-6 space-y-4 view-in' }, [
+      el('div', { class: 'flex flex-wrap items-center justify-between gap-4' }, [
+        el('div', {}, [
+          el('h1', { class: 'font-display text-2xl font-bold sm:text-3xl' }, '🎮 ' + s.album.title),
+          el('p', { class: 'text-sm text-slate-400' }, `${c.collected}/${c.total} figurinhas · ${s.player.packsOpened} pacotes abertos`),
+        ]),
+        el('div', { class: 'glass-soft flex items-center gap-3 rounded-xl px-4 py-2' }, [
+          el('span', { class: 'text-xl' }, '🪙'),
+          el('span', { class: 'font-display text-lg font-bold' }, String(s.player.coins)),
+        ]),
+      ]),
+      // progress bar
+      el('div', { class: 'glass-soft overflow-hidden rounded-full p-1' }, [
+        el('div', {
+          class: 'h-3 rounded-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 transition-all duration-700',
+          style: `width:${c.pct}%`,
+        }),
+      ]),
+      // sub-tabs
+      el('div', { class: 'glass-soft flex gap-1 rounded-xl p-1' }, [
+        subTab('shop', '🛒 Banca'),
+        subTab('album', '📖 Álbum'),
+        subTab('dupes', `🔁 Repetidas (${Store.duplicates().reduce((n, d) => n + d.count, 0)})`),
+      ]),
+    ]);
+  }
+
+  function subTab(id, label) {
+    return el('button', {
+      class: 'nav-tab flex-1 ' + (view === id ? 'active' : ''),
+      onclick: () => { view = id; pendingPaste = null; window.App.rerender(); },
+    }, label);
+  }
+
+  /* ============================================================
+     SHOP / BANCA
+     ============================================================ */
+  function renderShop(body, s) {
+    const PRICE = 50;
+    const wrap = el('div', { class: 'grid gap-6 lg:grid-cols-2' });
+
+    const buyPanel = el('div', { class: 'glass rounded-3xl p-8 text-center' }, [
+      el('div', { class: 'mb-2 text-sm uppercase tracking-widest text-slate-400' }, 'Banca de figurinhas'),
+      el('h2', { class: 'mb-6 font-display text-2xl font-bold' }, s.pack.name),
+      window.Editor ? packVisual(s.pack) : el('div'),
+      el('p', { class: 'mt-6 text-slate-400' }, `${s.pack.perPack} figurinhas · 🪙 ${PRICE} por pacote`),
+      el('div', { class: 'mt-6 flex flex-col items-center gap-3' }, [
+        el('button', {
+          class: 'btn-primary text-lg ' + (s.player.coins < PRICE ? 'opacity-50 pointer-events-none' : ''),
+          onclick: () => buyPack(PRICE),
+        }, '🎁 Comprar pacote'),
+        el('button', { class: 'btn-secondary text-sm', onclick: () => addCoins(100) }, '＋ Ganhar 100 moedas (demo)'),
+      ]),
+    ]);
+    wrap.appendChild(buyPanel);
+
+    // recent / tips panel
+    const info = el('div', { class: 'glass rounded-3xl p-8' }, [
+      el('h3', { class: 'mb-4 font-display text-lg font-bold' }, '✨ Raridades'),
+      el('div', { class: 'space-y-2' }, Object.keys(RARITIES).map((k) =>
+        el('div', { class: 'flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-sm' }, [
+          el('span', { class: 'font-semibold' }, RARITIES[k].label),
+          el('span', { class: 'text-slate-400' }, `~${RARITIES[k].weight}%`),
+        ])
+      )),
+      el('p', { class: 'mt-4 text-xs text-slate-400' }, 'Quanto mais raro, menor a chance de aparecer no pacote. Brilhantes e Legends têm efeitos especiais — passe o mouse sobre elas!'),
+    ]);
+    wrap.appendChild(info);
+    body.appendChild(wrap);
+  }
+
+  function packVisual(pack) {
+    return el('div', {
+      class: 'pack3d animate-floaty',
+      style: `--pack-c1:${pack.color1};--pack-c2:${pack.color2}`,
+    }, [el('div', { class: 'pack3d__strip' }), el('div', { class: 'pack3d__logo' }, pack.logo)]);
+  }
+
+  function addCoins(n) { Store.update((st) => { st.player.coins += n; }); toast('+' + n + ' 🪙', 'success'); }
+
+  function buyPack(price) {
+    const s = Store.get();
+    if (s.player.coins < price) { toast('Moedas insuficientes', 'error'); return; }
+    const drawn = drawPack(s);
+    Store.update((st) => {
+      st.player.coins -= price;
+      st.player.packsOpened += 1;
+      drawn.forEach((stk) => { st.player.owned[stk.id] = (st.player.owned[stk.id] || 0) + 1; });
+    }, { silent: true });
+    openPackAnimation(s.pack, drawn);
+  }
+
+  /* weighted random draw of N stickers from the checklist */
+  function drawPack(s) {
+    const pool = s.stickers;
+    const n = s.pack.perPack;
+    const result = [];
+    const totalWeight = pool.reduce((sum, stk) => sum + (RARITIES[stk.type]?.weight || 10), 0);
+    for (let i = 0; i < n; i++) {
+      let r = Math.random() * totalWeight;
+      let pick = pool[0];
+      for (const stk of pool) {
+        r -= (RARITIES[stk.type]?.weight || 10);
+        if (r <= 0) { pick = stk; break; }
+      }
+      result.push(pick);
+    }
+    return result;
+  }
+
+  /* ============================================================
+     PACK OPENING ANIMATION (rip + flip reveal one-by-one)
+     ============================================================ */
+  function openPackAnimation(pack, drawn) {
+    const stage = el('div', { class: 'flex flex-col items-center gap-6 py-2' });
+    const packNode = packVisual(pack);
+    const tapHint = el('p', { class: 'text-sm text-slate-300 animate-pulse' }, '👆 Toque para rasgar o pacote');
+    stage.appendChild(packNode);
+    stage.appendChild(tapHint);
+
+    const m = modal([
+      el('h3', { class: 'mb-1 text-center font-display text-xl font-bold' }, 'Abrindo pacote!'),
+      stage,
+    ], { size: 'max-w-2xl', dismissable: false });
+
+    function rip() {
+      packNode.removeEventListener('click', rip);
+      packNode.classList.add('pack-rip');
+      tapHint.remove();
+      setTimeout(() => revealCards(stage, drawn, m), 700);
+    }
+    packNode.addEventListener('click', rip);
+  }
+
+  function revealCards(stage, drawn, m) {
+    clear(stage);
+    const s = Store.get();
+    const grid = el('div', { class: 'grid grid-cols-3 gap-3 sm:grid-cols-' + Math.min(drawn.length, 6) });
+    // determine "new" status BEFORE this pack was added — use placed/owned counts
+    const cards = drawn.map((stk, i) => {
+      const card = window.Stickers.render(stk, { showStats: true });
+      const cover = el('div', { class: 'flip__cover' }, [el('span', {}, '?')]);
+      const flip = el('div', { class: 'flip aspect-[3/4]' }, [
+        el('div', { class: 'flip__inner' }, [
+          el('div', { class: 'flip__face' }, [cover]),
+          el('div', { class: 'flip__face flip__back' }, [card]),
+        ]),
+      ]);
+      return { flip, stk };
+    });
+    cards.forEach((c) => grid.appendChild(c.flip));
+    window.UI.bindHolo(grid);
+
+    stage.appendChild(grid);
+    const actions = el('div', { class: 'flex justify-center gap-3' }, [
+      el('button', { class: 'btn-secondary', onclick: () => revealAll() }, 'Revelar todas'),
+      el('button', { class: 'btn-primary', onclick: () => { m.close(); window.App.rerender(); } }, 'Concluir ✓'),
+    ]);
+    stage.appendChild(actions);
+
+    // auto-flip sequentially
+    let idx = 0;
+    function flipNext() {
+      if (idx >= cards.length) return;
+      const c = cards[idx++];
+      c.flip.classList.add('revealed');
+      const r = RARITIES[c.stk.type];
+      if (c.stk.type === 'legend' || c.stk.type === 'shiny') {
+        const rect = c.flip.getBoundingClientRect();
+        sparkleBurst(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        toast((c.stk.type === 'legend' ? '👑 LEGEND' : '✨ BRILHANTE') + ': ' + c.stk.name, 'success');
+      }
+      setTimeout(flipNext, 650);
+    }
+    function revealAll() { cards.forEach((c) => c.flip.classList.add('revealed')); }
+    setTimeout(flipNext, 350);
+  }
+
+  /* ============================================================
+     INTERACTIVE ALBUM
+     ============================================================ */
+  function renderAlbum(body, s) {
+    if (pendingPaste) {
+      const stk = Store.stickerById(pendingPaste);
+      body.appendChild(el('div', { class: 'glass-soft mb-4 flex items-center justify-between rounded-xl p-3' }, [
+        el('span', { class: 'text-sm' }, `📌 Colando "${stk ? stk.name : ''}" — clique no slot destacado.`),
+        el('button', { class: 'btn-secondary text-sm', onclick: () => { pendingPaste = null; window.App.rerender(); } }, 'Cancelar'),
+      ]));
+    }
+
+    s.album.pages.forEach((page, idx) => {
+      const grid = el('div', { class: 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6' },
+        page.slots.map((slot) => albumSlot(slot, s)));
+      body.appendChild(el('div', { class: 'glass mb-5 rounded-2xl p-5 page-in' }, [
+        el('h3', { class: 'mb-4 font-display font-semibold text-slate-300' }, `Página ${idx + 1}`),
+        grid,
+      ]));
+    });
+
+    window.UI.bindHolo(body);
+  }
+
+  function albumSlot(slot, s) {
+    const expected = slot.stickerId ? Store.stickerById(slot.stickerId) : null;
+    const placed = s.player.placed[slot.id];
+
+    // already filled
+    if (placed) {
+      const stk = Store.stickerById(placed);
+      const node = window.Stickers.render(stk, { showStats: false });
+      node.classList.add('cursor-pointer');
+      node.addEventListener('click', () => showCardDetail(stk));
+      return el('div', { class: 'relative paste-pop' }, [node]);
+    }
+
+    // empty slot — is this where the pending sticker goes?
+    const canPaste = pendingPaste && expected && expected.id === pendingPaste;
+    const owned = expected ? Store.ownedCount(expected.id) > 0 : false;
+
+    const slotEl = el('div', { class: 'slot' + (canPaste ? ' can-paste' : '') }, [
+      expected
+        ? el('div', { class: 'slot__hint' }, [
+            el('div', { class: 'mb-1 text-lg opacity-50' }, '#' + expected.number),
+            el('div', {}, owned ? '✅ na coleção' : '🔒 ' + expected.name),
+          ])
+        : el('div', { class: 'slot__hint' }, '— vazio —'),
+    ]);
+
+    if (canPaste) {
+      slotEl.addEventListener('click', (e) => pasteSticker(slot.id, expected.id, e));
+    } else if (expected && owned && !pendingPaste) {
+      // quick-paste: clicking an owned-but-empty slot pastes directly
+      slotEl.classList.add('cursor-pointer');
+      slotEl.addEventListener('click', (e) => pasteSticker(slot.id, expected.id, e));
+    }
+    return slotEl;
+  }
+
+  function pasteSticker(slotId, stickerId, e) {
+    if (Store.ownedCount(stickerId) <= 0) { toast('Você ainda não tem essa figurinha', 'error'); return; }
+    Store.update((st) => { st.player.placed[slotId] = stickerId; });
+    pendingPaste = null;
+    if (e) sparkleBurst(e.clientX, e.clientY);
+    toast('Figurinha colada! 🎉', 'success');
+    window.App.rerender();
+  }
+
+  function showCardDetail(stk) {
+    modal([
+      window.Stickers.detailCard(stk),
+      el('div', { class: 'mt-5 flex justify-center' }, [
+        el('button', { class: 'btn-secondary', onclick: () => document.querySelector('.modal-overlay')?.remove() }, 'Fechar'),
+      ]),
+    ], { size: 'max-w-sm' });
+  }
+
+  /* ============================================================
+     DUPLICATES PILE
+     ============================================================ */
+  function renderDupes(body, s) {
+    const dups = Store.duplicates();
+    if (!dups.length) {
+      body.appendChild(el('div', { class: 'glass rounded-3xl p-10 text-center text-slate-400' }, [
+        el('div', { class: 'mb-3 text-5xl' }, '🗂'),
+        el('p', {}, 'Nenhuma figurinha repetida por enquanto. Abra mais pacotes!'),
+      ]));
+      return;
+    }
+
+    body.appendChild(el('div', { class: 'mb-4 flex items-center justify-between' }, [
+      el('p', { class: 'text-sm text-slate-400' }, 'Figurinhas que você tem em duplicidade. Cole as que ainda faltam no álbum ou troque com amigos!'),
+      el('button', { class: 'btn-secondary text-sm', onclick: () => recycleDupes() }, '♻ Reciclar todas (+🪙)'),
+    ]));
+
+    const grid = el('div', { class: 'card-grid' });
+    dups.forEach(({ sticker, count }) => {
+      const card = window.Stickers.render(sticker, { showStats: false });
+      const badge = el('div', { class: 'absolute -right-2 -top-2 z-20 grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-indigo-500 text-sm font-bold shadow-lg' }, '×' + count);
+      const placeBtn = el('button', {
+        class: 'btn-primary mt-2 w-full text-xs',
+        onclick: () => { pendingPaste = sticker.id; view = 'album'; window.App.rerender(); toast('Escolha o slot no álbum', 'info'); },
+      }, Store.isPlaced(sticker.id) ? '✔ já colada' : '📌 Colar no álbum');
+      if (Store.isPlaced(sticker.id)) { placeBtn.classList.add('opacity-50', 'pointer-events-none'); }
+      grid.appendChild(el('div', { class: 'relative' }, [card, badge, placeBtn]));
+    });
+    window.UI.bindHolo(grid);
+    body.appendChild(grid);
+  }
+
+  function recycleDupes() {
+    const dups = Store.duplicates();
+    const reward = dups.reduce((n, d) => n + d.count * 5, 0);
+    if (!reward) return;
+    window.UI.confirm(`Reciclar ${dups.reduce((n, d) => n + d.count, 0)} repetidas por 🪙 ${reward}?`, () => {
+      Store.update((st) => {
+        dups.forEach(({ sticker }) => {
+          const placedOne = Store.isPlaced(sticker.id) ? 1 : 0;
+          st.player.owned[sticker.id] = placedOne; // keep only the placed copy (or 0)
+        });
+        st.player.coins += reward;
+      });
+      toast('+' + reward + ' 🪙 ♻', 'success');
+      window.App.rerender();
+    }, { yes: 'Reciclar' });
+  }
+
+  window.Player = { render };
+})();
+
+
+/* ===== js/main.js ===== */
+/* ============================================================
+   main.js — App controller: routing, menu, theme, nav wiring
+   Exposed as window.App
+   ============================================================ */
+(function () {
+  'use strict';
+  const { el, clear, toast } = window.UI;
+  const Store = window.Store;
+
+  const view = document.getElementById('view');
+
+  function applyTheme() {
+    document.body.setAttribute('data-theme', Store.get().album.theme || 'dark');
+  }
+
+  function setMode(mode) {
+    Store.update((st) => { st.mode = mode; });
+    updateNav();
+    rerender();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function updateNav() {
+    const mode = Store.get().mode;
+    document.querySelectorAll('#nav-tabs .nav-tab').forEach((b) => {
+      b.classList.toggle('active', b.dataset.mode === mode);
+    });
+  }
+
+  function rerender() {
+    const mode = Store.get().mode;
+    clear(view);
+    if (mode === 'editor') window.Editor.render(view);
+    else if (mode === 'player') window.Player.render(view);
+    else renderMenu(view);
+  }
+
+  /* ============================================================
+     MAIN MENU
+     ============================================================ */
+  function renderMenu(container) {
+    const s = Store.get();
+    const c = Store.completion();
+
+    const hero = el('div', { class: 'glass relative overflow-hidden rounded-3xl p-8 text-center sm:p-14 view-in' }, [
+      el('div', { class: 'pointer-events-none absolute -left-10 -top-10 text-[10rem] opacity-10 animate-floaty' }, '⚽'),
+      el('div', { class: 'pointer-events-none absolute -bottom-16 -right-8 text-[10rem] opacity-10 animate-floaty' }, '🏆'),
+      el('span', { class: 'inline-block rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-slate-300' }, 'Premium Sticker Studio'),
+      el('h1', { class: 'mt-5 font-display text-4xl font-bold leading-tight sm:text-6xl' }, [
+        'Crie. Colecione. ',
+        el('span', { class: 'bg-gradient-to-r from-fuchsia-400 via-pink-400 to-indigo-400 bg-clip-text text-transparent' }, 'Complete.'),
+      ]),
+      el('p', { class: 'mx-auto mt-4 max-w-xl text-slate-300' }, 'Desenhe seu próprio álbum de figurinhas, monte os pacotinhos e viva a emoção de abrir cada pacote para completar a coleção.'),
+      el('div', { class: 'mt-8 flex flex-wrap justify-center gap-3' }, [
+        el('button', { class: 'btn-primary text-lg', onclick: () => setMode('editor') }, '🎨 Modo Editor'),
+        el('button', { class: 'btn-secondary text-lg', onclick: () => setMode('player') }, '🎮 Modo Jogador'),
+      ]),
+    ]);
+
+    const stats = el('div', { class: 'mt-6 grid gap-4 sm:grid-cols-4 view-in' }, [
+      statCard('🃏', s.stickers.length, 'Figurinhas criadas'),
+      statCard('📄', s.album.pages.length, 'Páginas'),
+      statCard('✅', `${c.collected}/${c.total}`, 'Coletadas'),
+      statCard('📦', s.player.packsOpened, 'Pacotes abertos'),
+    ]);
+
+    const features = el('div', { class: 'mt-6 grid gap-4 md:grid-cols-3 view-in' }, [
+      featureCard('📔', 'Álbum Customizável', 'Capa, contracapa, páginas dinâmicas e 4 paletas de cores (Dark, Light, Neon, Vintage).'),
+      featureCard('✨', 'Raridades Premium', 'Escudos, FWC, Brilhantes holográficos e Legends dourados que reagem ao mouse.'),
+      featureCard('🎁', 'Pacotinhos Animados', 'Configure os pacotes e abra com efeito de rasgar e flip das cartas.'),
+    ]);
+
+    // rarity showcase using a few sample stickers (or real ones)
+    const showcase = buildShowcase(s);
+
+    container.appendChild(el('div', { class: 'space-y-6' }, [hero, stats, features, showcase]));
+  }
+
+  function statCard(icon, value, label) {
+    return el('div', { class: 'glass-soft rounded-2xl p-5 text-center' }, [
+      el('div', { class: 'text-2xl' }, icon),
+      el('div', { class: 'mt-1 font-display text-2xl font-bold' }, String(value)),
+      el('div', { class: 'text-xs uppercase tracking-wide text-slate-400' }, label),
+    ]);
+  }
+  function featureCard(icon, title, desc) {
+    return el('div', { class: 'glass rounded-2xl p-6 transition hover:-translate-y-1' }, [
+      el('div', { class: 'mb-3 grid h-12 w-12 place-items-center rounded-xl bg-gradient-to-br from-fuchsia-500/30 to-indigo-500/30 text-2xl' }, icon),
+      el('h3', { class: 'mb-1 font-display text-lg font-bold' }, title),
+      el('p', { class: 'text-sm text-slate-400' }, desc),
+    ]);
+  }
+
+  function buildShowcase(s) {
+    const samples = s.stickers.length >= 3 ? s.stickers.slice(0, 6) : SAMPLE_STICKERS;
+    const grid = el('div', { class: 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-6' },
+      samples.map((stk) => window.Stickers.render(stk, { showStats: true })));
+    window.UI.bindHolo(grid);
+    return el('div', { class: 'glass rounded-3xl p-6 view-in' }, [
+      el('h3', { class: 'mb-1 font-display text-xl font-bold' }, 'Vitrine de raridades'),
+      el('p', { class: 'mb-5 text-sm text-slate-400' }, 'Passe o mouse sobre as Brilhantes e Legends. ✨'),
+      grid,
+    ]);
+  }
+
+  const SAMPLE_STICKERS = [
+    { id: 's1', number: 1, name: 'Comum', team: 'Time A', type: 'normal', height: '1,80 m', weight: '75 kg' },
+    { id: 's2', number: 2, name: 'Escudo', team: 'Crest FC', type: 'escudo' },
+    { id: 's3', number: 3, name: 'FWC Star', team: 'Special Ed.', type: 'fwc', height: '1,78 m' },
+    { id: 's4', number: 4, name: 'Brilhante', team: 'Holo United', type: 'shiny', height: '1,82 m' },
+    { id: 's5', number: 5, name: 'Legend', team: 'Hall of Fame', type: 'legend', height: '1,85 m', weight: '80 kg' },
+    { id: 's6', number: 6, name: 'Craque', team: 'Time B', type: 'normal', weight: '70 kg' },
+  ];
+
+  /* ============================================================
+     wiring
+     ============================================================ */
+  function init() {
+    applyTheme();
+    updateNav();
+    rerender();
+
+    document.querySelectorAll('#nav-tabs .nav-tab').forEach((b) => {
+      b.addEventListener('click', () => setMode(b.dataset.mode));
+    });
+    document.getElementById('nav-logo').addEventListener('click', () => setMode('menu'));
+
+    document.getElementById('btn-save').addEventListener('click', () => { Store.save(); toast('Projeto salvo 💾', 'success'); });
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      window.UI.confirm('Reiniciar TODO o projeto? Isso apaga álbum, figurinhas e progresso.', () => {
+        Store.reset(); applyTheme(); updateNav(); rerender(); toast('Projeto reiniciado', 'info');
+      }, { yes: 'Reiniciar' });
+    });
+  }
+
+  window.App = { rerender, setMode, applyTheme };
+  document.addEventListener('DOMContentLoaded', init);
+})();
+
+  </script>
+</body>
+</html>
