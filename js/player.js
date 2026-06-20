@@ -229,6 +229,11 @@
         el('span', { class: 'text-sm' }, `📌 Colando "${stk ? stk.name : ''}" — clique no slot destacado.`),
         el('button', { class: 'btn-secondary text-sm', onclick: () => { pendingPaste = null; window.App.rerender(); } }, 'Cancelar'),
       ]));
+    } else if (pasteableCount(s) > 0) {
+      body.appendChild(el('div', { class: 'glass-soft mb-4 flex items-center justify-between gap-2 rounded-xl p-3' }, [
+        el('span', { class: 'text-sm' }, `✨ Você tem ${pasteableCount(s)} figurinha(s) pronta(s) para colar.`),
+        el('button', { class: 'btn-primary text-sm', onclick: placeAll }, '📌 Colar todas'),
+      ]));
     }
 
     s.album.pages.forEach((page, idx) => {
@@ -304,6 +309,31 @@
     pendingPaste = null;
     if (e) sparkleBurst(e.clientX, e.clientY);
     toast('Figurinha colada! 🎉', 'success');
+    window.App.rerender();
+  }
+
+  /* how many owned stickers can still be pasted into their (empty) slots */
+  function pasteableCount(s) {
+    let n = 0;
+    s.album.pages.forEach((p) => p.slots.forEach((sl) => {
+      if (sl.stickerId && !s.player.placed[sl.id] && Store.ownedCount(sl.stickerId) > 0) n++;
+    }));
+    return n;
+  }
+
+  /* paste every owned sticker into its slot at once */
+  function placeAll() {
+    const s = Store.get();
+    const count = pasteableCount(s);
+    if (!count) { toast('Nada para colar ainda', 'info'); return; }
+    Store.update((st) => {
+      st.album.pages.forEach((p) => p.slots.forEach((sl) => {
+        if (sl.stickerId && !st.player.placed[sl.id] && Store.ownedCount(sl.stickerId) > 0) {
+          st.player.placed[sl.id] = sl.stickerId;
+        }
+      }));
+    });
+    toast(`${count} figurinha(s) coladas! 🎉`, 'success');
     window.App.rerender();
   }
 

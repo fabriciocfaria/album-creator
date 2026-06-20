@@ -1574,9 +1574,12 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
 
     // Pages manager
     const pagesPanel = panel('Páginas & Slots', []);
-    const pagesHead = el('div', { class: 'mb-4 flex items-center justify-between' }, [
+    const pagesHead = el('div', { class: 'mb-4 flex flex-wrap items-center justify-between gap-2' }, [
       el('p', { class: 'text-sm text-slate-400' }, `${s.album.pages.length} páginas · ${Store.totalSlots()} slots no total`),
-      el('button', { class: 'btn-primary text-sm', onclick: addPage }, '＋ Nova página'),
+      el('div', { class: 'flex gap-2' }, [
+        el('button', { class: 'btn-secondary text-sm', onclick: autoFillSlots }, '✨ Preencher tudo'),
+        el('button', { class: 'btn-primary text-sm', onclick: addPage }, '＋ Nova página'),
+      ]),
     ]);
     pagesPanel.appendChild(pagesHead);
 
@@ -1760,6 +1763,37 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   }
 
   /* Pick which sticker definition this slot expects (the album checklist) */
+  /* Auto-link every not-yet-linked sticker to an empty slot, adding pages if needed */
+  function autoFillSlots() {
+    const s = Store.get();
+    if (!s.stickers.length) { toast('Crie figurinhas primeiro na aba 🃏', 'info'); activeTab = 'stickers'; window.App.rerender(); return; }
+    const linked = new Set(s.album.pages.flatMap((p) => p.slots.map((sl) => sl.stickerId).filter(Boolean)));
+    const pending = s.stickers.filter((st) => !linked.has(st.id));
+    if (!pending.length) { toast('Todas as figurinhas já estão vinculadas ✓', 'info'); return; }
+
+    confirm(`Vincular automaticamente ${pending.length} figurinha(s) aos slots vazios? Páginas serão criadas se faltar espaço.`, () => {
+      Store.update((st) => {
+        const queue = pending.slice();
+        // fill existing empty slots first (in page/slot order)
+        for (const p of st.album.pages) {
+          for (const sl of p.slots) {
+            if (!queue.length) break;
+            if (!sl.stickerId) sl.stickerId = queue.shift().id;
+          }
+          if (!queue.length) break;
+        }
+        // create new grid pages for the rest
+        while (queue.length) {
+          const page = Store.makePage(6);
+          for (const sl of page.slots) { if (!queue.length) break; sl.stickerId = queue.shift().id; }
+          st.album.pages.push(page);
+        }
+      });
+      toast(`${pending.length} figurinha(s) vinculada(s) ✓`, 'success');
+      window.App.rerender();
+    }, { yes: 'Preencher' });
+  }
+
   function assignStickerToSlot(slotId) {
     const s = Store.get();
     if (!s.stickers.length) { toast('Crie figurinhas primeiro na aba 🃏', 'info'); activeTab = 'stickers'; window.App.rerender(); return; }
@@ -2456,6 +2490,11 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
         el('span', { class: 'text-sm' }, `📌 Colando "${stk ? stk.name : ''}" — clique no slot destacado.`),
         el('button', { class: 'btn-secondary text-sm', onclick: () => { pendingPaste = null; window.App.rerender(); } }, 'Cancelar'),
       ]));
+    } else if (pasteableCount(s) > 0) {
+      body.appendChild(el('div', { class: 'glass-soft mb-4 flex items-center justify-between gap-2 rounded-xl p-3' }, [
+        el('span', { class: 'text-sm' }, `✨ Você tem ${pasteableCount(s)} figurinha(s) pronta(s) para colar.`),
+        el('button', { class: 'btn-primary text-sm', onclick: placeAll }, '📌 Colar todas'),
+      ]));
     }
 
     s.album.pages.forEach((page, idx) => {
@@ -2531,6 +2570,31 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     pendingPaste = null;
     if (e) sparkleBurst(e.clientX, e.clientY);
     toast('Figurinha colada! 🎉', 'success');
+    window.App.rerender();
+  }
+
+  /* how many owned stickers can still be pasted into their (empty) slots */
+  function pasteableCount(s) {
+    let n = 0;
+    s.album.pages.forEach((p) => p.slots.forEach((sl) => {
+      if (sl.stickerId && !s.player.placed[sl.id] && Store.ownedCount(sl.stickerId) > 0) n++;
+    }));
+    return n;
+  }
+
+  /* paste every owned sticker into its slot at once */
+  function placeAll() {
+    const s = Store.get();
+    const count = pasteableCount(s);
+    if (!count) { toast('Nada para colar ainda', 'info'); return; }
+    Store.update((st) => {
+      st.album.pages.forEach((p) => p.slots.forEach((sl) => {
+        if (sl.stickerId && !st.player.placed[sl.id] && Store.ownedCount(sl.stickerId) > 0) {
+          st.player.placed[sl.id] = sl.stickerId;
+        }
+      }));
+    });
+    toast(`${count} figurinha(s) coladas! 🎉`, 'success');
     window.App.rerender();
   }
 

@@ -90,9 +90,12 @@
 
     // Pages manager
     const pagesPanel = panel('Páginas & Slots', []);
-    const pagesHead = el('div', { class: 'mb-4 flex items-center justify-between' }, [
+    const pagesHead = el('div', { class: 'mb-4 flex flex-wrap items-center justify-between gap-2' }, [
       el('p', { class: 'text-sm text-slate-400' }, `${s.album.pages.length} páginas · ${Store.totalSlots()} slots no total`),
-      el('button', { class: 'btn-primary text-sm', onclick: addPage }, '＋ Nova página'),
+      el('div', { class: 'flex gap-2' }, [
+        el('button', { class: 'btn-secondary text-sm', onclick: autoFillSlots }, '✨ Preencher tudo'),
+        el('button', { class: 'btn-primary text-sm', onclick: addPage }, '＋ Nova página'),
+      ]),
     ]);
     pagesPanel.appendChild(pagesHead);
 
@@ -276,6 +279,37 @@
   }
 
   /* Pick which sticker definition this slot expects (the album checklist) */
+  /* Auto-link every not-yet-linked sticker to an empty slot, adding pages if needed */
+  function autoFillSlots() {
+    const s = Store.get();
+    if (!s.stickers.length) { toast('Crie figurinhas primeiro na aba 🃏', 'info'); activeTab = 'stickers'; window.App.rerender(); return; }
+    const linked = new Set(s.album.pages.flatMap((p) => p.slots.map((sl) => sl.stickerId).filter(Boolean)));
+    const pending = s.stickers.filter((st) => !linked.has(st.id));
+    if (!pending.length) { toast('Todas as figurinhas já estão vinculadas ✓', 'info'); return; }
+
+    confirm(`Vincular automaticamente ${pending.length} figurinha(s) aos slots vazios? Páginas serão criadas se faltar espaço.`, () => {
+      Store.update((st) => {
+        const queue = pending.slice();
+        // fill existing empty slots first (in page/slot order)
+        for (const p of st.album.pages) {
+          for (const sl of p.slots) {
+            if (!queue.length) break;
+            if (!sl.stickerId) sl.stickerId = queue.shift().id;
+          }
+          if (!queue.length) break;
+        }
+        // create new grid pages for the rest
+        while (queue.length) {
+          const page = Store.makePage(6);
+          for (const sl of page.slots) { if (!queue.length) break; sl.stickerId = queue.shift().id; }
+          st.album.pages.push(page);
+        }
+      });
+      toast(`${pending.length} figurinha(s) vinculada(s) ✓`, 'success');
+      window.App.rerender();
+    }, { yes: 'Preencher' });
+  }
+
   function assignStickerToSlot(slotId) {
     const s = Store.get();
     if (!s.stickers.length) { toast('Crie figurinhas primeiro na aba 🃏', 'info'); activeTab = 'stickers'; window.App.rerender(); return; }
