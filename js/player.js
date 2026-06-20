@@ -245,10 +245,18 @@
         content = el('div', { class: 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6' },
           page.slots.map((slot) => albumSlot(slot, s)));
       }
-      body.appendChild(el('div', { class: 'glass mb-5 rounded-2xl p-5 page-in' }, [
-        el('h3', { class: 'mb-4 font-display font-semibold text-slate-300' }, `Página ${idx + 1}`),
+      const pageCard = el('div', { class: 'glass mb-5 rounded-2xl p-5 page-in' }, [
+        el('h3', { class: 'mb-4 font-display font-semibold text-slate-100' }, `Página ${idx + 1}`),
         content,
-      ]));
+      ]);
+      const isFree = page.layout === 'free' && page.design;
+      if (!isFree && page.bg) {
+        const v = page.bg;
+        pageCard.setAttribute('style', v.indexOf('|') >= 0
+          ? `background:linear-gradient(160deg, ${v.split('|')[0]}, ${v.split('|')[1]})`
+          : `background:${v}`);
+      }
+      body.appendChild(pageCard);
     });
 
     window.UI.bindHolo(body);

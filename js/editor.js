@@ -153,14 +153,42 @@
       ]);
       window.UI.bindHolo(wrap);
       bodyNode = el('div', {}, [
-        el('p', { class: 'mb-2 text-center text-xs text-slate-400' }, 'Toque num slot 🃏 para vincular a figurinha que pertence a ele.'),
+        el('p', { class: 'mb-2 text-center text-xs text-slate-400' }, 'A cor/fundo desta página é editada no Canva (✨ Personalizar → 🎨 Fundo). Toque num slot 🃏 para vincular a figurinha.'),
         wrap,
       ]);
     } else {
-      bodyNode = el('div', { class: 'grid grid-cols-3 gap-2 sm:grid-cols-6' },
-        page.slots.map((slot) => slotPreview(slot)));
+      bodyNode = el('div', {}, [
+        pageColorControl(page),
+        el('div', { class: 'grid grid-cols-3 gap-2 sm:grid-cols-6' }, page.slots.map((slot) => slotPreview(slot))),
+      ]);
     }
-    return el('div', { class: 'glass-soft rounded-xl p-4 page-in' }, [head, bodyNode]);
+    const card = el('div', { class: 'glass-soft rounded-xl p-4 page-in' }, [head, bodyNode]);
+    if (!isFree && page.bg) card.setAttribute('style', pageBgStyle(page.bg));
+    return card;
+  }
+
+  /* page background as solid color or "c1|c2" gradient */
+  function pageBgStyle(v) {
+    if (!v) return '';
+    if (v.indexOf('|') >= 0) { const [a, b] = v.split('|'); return `background:linear-gradient(160deg, ${a}, ${b})`; }
+    return `background:${v}`;
+  }
+
+  /* compact color control for a (grid) page background */
+  function pageColorControl(page) {
+    const SWATCHES = ['#0f172a', '#1e293b', '#312e81', '#5b21b6', '#831843', '#7f1d1d', '#064e3b', '#155e75', '#92400e', '#f8fafc'];
+    const GRADIENTS = [['#7c3aed', '#2563eb'], ['#db2777', '#f97316'], ['#0ea5e9', '#1e3a8a'], ['#16a34a', '#064e3b'], ['#f59e0b', '#b45309']];
+    const setBg = (v) => { Store.update((st) => { const p = st.album.pages.find((x) => x.id === page.id); if (p) p.bg = v; }); window.App.rerender(); };
+    const wheel = el('input', { type: 'color', value: (page.bg && page.bg.indexOf('|') < 0) ? page.bg : '#1e293b', class: 'h-7 w-9 flex-shrink-0 rounded bg-transparent' });
+    wheel.addEventListener('input', (e) => { Store.update((st) => { const p = st.album.pages.find((x) => x.id === page.id); if (p) p.bg = e.target.value; }, { silent: true }); });
+    wheel.addEventListener('change', () => window.App.rerender());
+    return el('div', { class: 'mb-3 flex flex-wrap items-center gap-1.5' }, [
+      el('span', { class: 'mr-1 text-[11px] uppercase tracking-wide text-slate-400' }, '🎨 Cor da página'),
+      wheel,
+      ...SWATCHES.map((c) => el('button', { class: 'h-6 w-6 rounded border border-white/20', style: `background:${c}`, title: c, onclick: () => setBg(c) })),
+      ...GRADIENTS.map(([a, b]) => el('button', { class: 'h-6 w-8 rounded border border-white/20', style: `background:linear-gradient(160deg,${a},${b})`, onclick: () => setBg(a + '|' + b) })),
+      el('button', { class: 'ghost-btn !h-6 !w-6 text-xs', title: 'Sem cor', onclick: () => setBg('') }, '↺'),
+    ]);
   }
 
   /* slot node inside the free (Canva) page preview — used to link a sticker */
