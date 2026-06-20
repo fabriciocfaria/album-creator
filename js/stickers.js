@@ -22,7 +22,11 @@
       ? el('div', { class: 'sticker__photo', style: `background-image:url('${sticker.photo}')` })
       : el('div', { class: 'sticker__photo sticker__photo--empty' }, initials(sticker.name));
 
-    const layers = [photo, el('div', { class: 'sticker__overlay' })];
+    const layers = [];
+    // custom background color (behind everything)
+    if (sticker.bgColor) layers.push(el('div', { class: 'sticker__bg', style: bgFill(sticker.bgColor) }));
+    layers.push(photo);
+    layers.push(el('div', { class: 'sticker__overlay' }));
 
     // Holographic layers for shiny + legend
     if (sticker.type === 'shiny') {
@@ -51,9 +55,21 @@
       if (stats.length) layers.push(el('div', { class: 'sticker__stats' }, stats));
     }
 
-    const card = el('div', { class: 'sticker sticker--' + (sticker.type || 'normal') }, layers);
+    const card = el('div', { class: cardClass(sticker) }, layers);
     if (opts.onClick) card.addEventListener('click', opts.onClick);
     return card;
+  }
+
+  /* background fill: solid color or "c1|c2" gradient */
+  function bgFill(v) {
+    if (v && v.indexOf('|') >= 0) { const [a, b] = v.split('|'); return `background:linear-gradient(155deg, ${a}, ${b})`; }
+    return `background:${v}`;
+  }
+
+  /* compose the card classes: rarity + free shape */
+  function cardClass(sticker) {
+    const shape = sticker.shape || (sticker.type === 'escudo' ? 'shield' : 'rect');
+    return 'sticker sticker--' + (sticker.type || 'normal') + ' shape--' + shape;
   }
 
   /* render a sticker whose face is a custom Canva design */
@@ -65,7 +81,7 @@
     if (sticker.type === 'legend') { layers.push(el('div', { class: 'sticker__holo' })); layers.push(el('div', { class: 'sticker__crown' }, '👑')); }
     if (sticker.number != null) layers.push(el('div', { class: 'sticker__num' }, '#' + sticker.number));
     layers.push(el('div', { class: 'sticker__badge' }, rar.badge));
-    return el('div', { class: 'sticker sticker--' + (sticker.type || 'normal') }, layers);
+    return el('div', { class: cardClass(sticker) }, layers);
   }
 
   function initials(name) {

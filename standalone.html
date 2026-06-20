@@ -187,18 +187,43 @@ body { background: var(--bg-1); }
 
 /* custom Canva design face fills the card */
 .sticker__customface { position:absolute; inset:0; z-index:1; border-radius:inherit; }
+/* custom background color layer (behind photo) */
+.sticker__bg { position:absolute; inset:0; z-index:0; }
+
+/* ============================================================
+   SHAPE (formato livre da carta) — independente da raridade
+   ============================================================ */
+.shape--rect   { /* default rectangle */ }
+.shape--shield {
+  clip-path: polygon(50% 0, 100% 12%, 100% 60%, 50% 100%, 0 60%, 0 12%);
+  border-radius: 8px;
+}
+.shape--shield .sticker__name { left:0; right:0; bottom:30px; text-align:center; padding:0 8px; }
+.shape--circle { clip-path: ellipse(50% 50% at 50% 50%); }
+.shape--circle .sticker__name { bottom:18%; left:0; right:0; text-align:center; padding:0 14px; }
+.shape--circle .sticker__team { left:0; right:0; text-align:center; bottom:11%; }
+.shape--circle .sticker__num { top:14%; left:18%; }
+.shape--circle .sticker__badge { top:14%; right:18%; }
+.shape--hex {
+  clip-path: polygon(50% 0, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%);
+}
+.shape--hex .sticker__name { left:0; right:0; bottom:24px; text-align:center; padding:0 14px; }
 
 /* ---- Rarity: NORMAL ---- */
-.sticker--normal { border-color: rgba(148,163,184,.5); }
+.sticker--normal { border-color: rgba(148,163,184,.55); }
+.sticker--normal .sticker__bg { background: linear-gradient(160deg,#334155,#0f172a); }
 
-/* ---- Rarity: ESCUDO (crest/emblem shape) ---- */
+/* ---- Rarity: ESCUDO (crest/emblem treatment) ---- */
 .sticker--escudo {
-  clip-path: polygon(50% 0, 100% 12%, 100% 62%, 50% 100%, 0 62%, 0 12%);
-  border-radius: 8px;
   background: linear-gradient(160deg, #243b55, #141e30);
-  border-color: rgba(56,189,248,.6);
+  border-color: rgba(56,189,248,.7);
+  box-shadow: 0 0 0 2px rgba(56,189,248,.25), 0 14px 30px -14px rgba(56,189,248,.6);
 }
-.sticker--escudo .sticker__name { bottom: 30px; text-align:center; left:0; right:0; padding:0 6px; }
+.sticker--escudo .sticker__bg { background: radial-gradient(circle at 50% 35%, #2c4a6b, #0c1726 75%); }
+.sticker--escudo::after {
+  content:''; position:absolute; left:50%; top:14%; width:30%; height:30%; transform:translateX(-50%);
+  background: radial-gradient(circle, rgba(56,189,248,.25), transparent 70%); z-index:1; pointer-events:none;
+}
 .sticker--escudo .sticker__num { top: 12px; }
 
 /* ---- Rarity: FWC (classic special edition) ---- */
@@ -207,14 +232,22 @@ body { background: var(--bg-1); }
   background: linear-gradient(160deg, #0c2340, #06121f);
   box-shadow: 0 0 0 1px #0c2340, 0 14px 30px -12px rgba(226,194,117,.5);
 }
+.sticker--fwc .sticker__bg { background: linear-gradient(160deg,#0c2340,#06121f); }
 .sticker--fwc::before {
   content:''; position:absolute; inset:6px; border:1px solid rgba(226,194,117,.55);
   border-radius:8px; pointer-events:none; z-index:3;
 }
+/* FWC classic top ribbon */
+.sticker--fwc::after {
+  content:'★ EDIÇÃO ESPECIAL ★'; position:absolute; top:10px; left:50%; transform:translateX(-50%);
+  font-size:.42rem; letter-spacing:.18em; font-weight:800; color:#e2c275; z-index:4; white-space:nowrap;
+}
 .sticker--fwc .sticker__badge { background:#e2c275; color:#06121f; border-color:#fff3; }
+.sticker--fwc .sticker__name { font-family:'Cinzel', serif; }
 
 /* ---- Rarity: SHINY / BRILHANTE (holographic) ---- */
 .sticker--shiny { border-color: rgba(255,255,255,.6); }
+.sticker--shiny .sticker__bg { background: linear-gradient(135deg,#1b2a4a,#3b1d5a,#15324d); }
 .sticker--shiny .sticker__holo {
   position:absolute; inset:0; z-index:2; mix-blend-mode: color-dodge; opacity:.55;
   background:
@@ -238,6 +271,7 @@ body { background: var(--bg-1); }
     linear-gradient(135deg, #fff1b8, #d4af37 30%, #8a6d1d 50%, #f7e08a 70%, #b8860b) border-box;
   box-shadow: 0 0 30px -6px rgba(212,175,55,.55), 0 16px 34px -14px rgba(0,0,0,.9);
 }
+.sticker--legend .sticker__bg { background: radial-gradient(circle at 50% 30%, #3a2c08, #120d04 75%); }
 .sticker--legend .sticker__name { font-family:'Cinzel', serif; color:#ffe9a8; }
 .sticker--legend .sticker__badge {
   background: linear-gradient(135deg,#f7e08a,#b8860b); color:#2a1d00; border-color:#fff6;
@@ -725,6 +759,83 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
 })();
 
 
+/* ===== js/assets.js ===== */
+/* ============================================================
+   assets.js — avatares de "jogador modelo" gerados via SVG
+   (sem fotos reais por questão de direitos autorais)
+   Exposto como window.Assets
+   ============================================================ */
+(function () {
+  'use strict';
+
+  function avatar(o) {
+    o = o || {};
+    const jersey = o.jersey || '#e11d48';
+    const jersey2 = o.jersey2 || shade(jersey, -25);
+    const skin = o.skin || '#f1c27d';
+    const hair = o.hair || '#2b2118';
+    const bg1 = o.bg1 || '#1e293b';
+    const bg2 = o.bg2 || '#020617';
+    const num = o.num != null ? o.num : '10';
+    const svg =
+      "<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400' viewBox='0 0 300 400'>" +
+      "<defs>" +
+        "<linearGradient id='bg' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" + bg1 + "'/><stop offset='1' stop-color='" + bg2 + "'/></linearGradient>" +
+        "<linearGradient id='js' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" + jersey + "'/><stop offset='1' stop-color='" + jersey2 + "'/></linearGradient>" +
+      "</defs>" +
+      "<rect width='300' height='400' fill='url(#bg)'/>" +
+      "<circle cx='150' cy='150' r='120' fill='#ffffff' opacity='0.05'/>" +
+      "<ellipse cx='150' cy='405' rx='200' ry='70' fill='#14532d' opacity='0.45'/>" +
+      // neck
+      "<rect x='132' y='168' width='36' height='40' rx='14' fill='" + shade(skin, -18) + "'/>" +
+      // head
+      "<circle cx='150' cy='130' r='54' fill='" + skin + "'/>" +
+      // ears
+      "<circle cx='98' cy='132' r='12' fill='" + skin + "'/><circle cx='202' cy='132' r='12' fill='" + skin + "'/>" +
+      // hair
+      "<path d='M96 126 Q104 64 150 60 Q196 64 204 126 Q196 100 178 96 Q150 84 122 96 Q104 100 96 126 Z' fill='" + hair + "'/>" +
+      // simple face
+      "<circle cx='130' cy='128' r='6' fill='#2d2d2d'/><circle cx='170' cy='128' r='6' fill='#2d2d2d'/>" +
+      "<path d='M134 156 Q150 168 166 156' stroke='#9b5b3a' stroke-width='4' fill='none' stroke-linecap='round'/>" +
+      // jersey
+      "<path d='M64 270 Q66 210 122 196 L178 196 Q234 210 236 270 L236 360 L64 360 Z' fill='url(#js)'/>" +
+      // sleeves
+      "<path d='M64 270 L30 312 L56 332 L86 286 Z' fill='url(#js)'/>" +
+      "<path d='M236 270 L270 312 L244 332 L214 286 Z' fill='url(#js)'/>" +
+      // collar
+      "<path d='M122 196 L150 226 L178 196 Z' fill='#ffffff' opacity='0.85'/>" +
+      // number
+      "<text x='150' y='325' font-family='Arial, sans-serif' font-size='74' font-weight='bold' fill='#ffffff' text-anchor='middle' opacity='0.92'>" + num + "</text>" +
+      "</svg>";
+    // encode with double-quote-safe escaping so it works inside CSS url('...')
+    return 'data:image/svg+xml,' + encodeURIComponent(svg.replace(/'/g, '"'));
+  }
+
+  /* lighten/darken a hex color by pct (-100..100) */
+  function shade(hex, pct) {
+    const h = hex.replace('#', '');
+    const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+    let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const t = pct < 0 ? 0 : 255, p = Math.abs(pct) / 100;
+    r = Math.round((t - r) * p) + r; g = Math.round((t - g) * p) + g; b = Math.round((t - b) * p) + b;
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+
+  const players = [
+    { name: 'Camisa 10', url: avatar({ jersey: '#e11d48', num: 10, bg1: '#1e293b' }) },
+    { name: 'Azul 7', url: avatar({ jersey: '#2563eb', num: 7, bg1: '#0c2340' }) },
+    { name: 'Verde 9', url: avatar({ jersey: '#16a34a', skin: '#8d5524', num: 9, bg1: '#052e16' }) },
+    { name: 'Ouro 11', url: avatar({ jersey: '#facc15', jersey2: '#b45309', num: 11, bg1: '#1c1917', skin: '#c68642', hair: '#0d0d0d' }) },
+    { name: 'Laranja 8', url: avatar({ jersey: '#f97316', num: 8, bg1: '#1e293b', skin: '#ffdbac', hair: '#5b3a1a' }) },
+    { name: 'Goleiro 1', url: avatar({ jersey: '#111827', jersey2: '#374151', num: 1, bg1: '#334155' }) },
+    { name: 'Roxo 23', url: avatar({ jersey: '#a855f7', num: 23, bg1: '#2e1065', skin: '#8d5524', hair: '#1a1a1a' }) },
+    { name: 'Ciano 5', url: avatar({ jersey: '#06b6d4', skin: '#5c3a21', num: 5, bg1: '#083344', hair: '#0d0d0d' }) },
+  ];
+
+  window.Assets = { avatar, players, shade };
+})();
+
+
 /* ===== js/canvas.js ===== */
 /* ============================================================
    canvas.js — Editor livre estilo "Canva" (touch-friendly)
@@ -1117,7 +1228,11 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       ? el('div', { class: 'sticker__photo', style: `background-image:url('${sticker.photo}')` })
       : el('div', { class: 'sticker__photo sticker__photo--empty' }, initials(sticker.name));
 
-    const layers = [photo, el('div', { class: 'sticker__overlay' })];
+    const layers = [];
+    // custom background color (behind everything)
+    if (sticker.bgColor) layers.push(el('div', { class: 'sticker__bg', style: bgFill(sticker.bgColor) }));
+    layers.push(photo);
+    layers.push(el('div', { class: 'sticker__overlay' }));
 
     // Holographic layers for shiny + legend
     if (sticker.type === 'shiny') {
@@ -1146,9 +1261,21 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       if (stats.length) layers.push(el('div', { class: 'sticker__stats' }, stats));
     }
 
-    const card = el('div', { class: 'sticker sticker--' + (sticker.type || 'normal') }, layers);
+    const card = el('div', { class: cardClass(sticker) }, layers);
     if (opts.onClick) card.addEventListener('click', opts.onClick);
     return card;
+  }
+
+  /* background fill: solid color or "c1|c2" gradient */
+  function bgFill(v) {
+    if (v && v.indexOf('|') >= 0) { const [a, b] = v.split('|'); return `background:linear-gradient(155deg, ${a}, ${b})`; }
+    return `background:${v}`;
+  }
+
+  /* compose the card classes: rarity + free shape */
+  function cardClass(sticker) {
+    const shape = sticker.shape || (sticker.type === 'escudo' ? 'shield' : 'rect');
+    return 'sticker sticker--' + (sticker.type || 'normal') + ' shape--' + shape;
   }
 
   /* render a sticker whose face is a custom Canva design */
@@ -1160,7 +1287,7 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     if (sticker.type === 'legend') { layers.push(el('div', { class: 'sticker__holo' })); layers.push(el('div', { class: 'sticker__crown' }, '👑')); }
     if (sticker.number != null) layers.push(el('div', { class: 'sticker__num' }, '#' + sticker.number));
     layers.push(el('div', { class: 'sticker__badge' }, rar.badge));
-    return el('div', { class: 'sticker sticker--' + (sticker.type || 'normal') }, layers);
+    return el('div', { class: cardClass(sticker) }, layers);
   }
 
   function initials(name) {
@@ -1263,16 +1390,16 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       labeled('Título da capa', input(s.album.cover.title, (v) => Store.update((st) => { st.album.cover.title = v; }))),
       labeled('Subtítulo', input(s.album.cover.subtitle, (v) => Store.update((st) => { st.album.cover.subtitle = v; }))),
       imageField('Imagem de fundo da capa', s.album.cover.image,
-        (url) => Store.update((st) => { st.album.cover.image = url; }),
-        () => Store.update((st) => { st.album.cover.image = ''; })),
+        (url) => { Store.update((st) => { st.album.cover.image = url; }); window.App.rerender(); },
+        () => { Store.update((st) => { st.album.cover.image = ''; }); window.App.rerender(); }),
     ]));
 
     // Back cover
     settings.appendChild(panel('Contracapa', [
       labeled('Texto da contracapa', textarea(s.album.backCover.text, (v) => Store.update((st) => { st.album.backCover.text = v; }))),
       imageField('Imagem de fundo da contracapa', s.album.backCover.image,
-        (url) => Store.update((st) => { st.album.backCover.image = url; }),
-        () => Store.update((st) => { st.album.backCover.image = ''; })),
+        (url) => { Store.update((st) => { st.album.backCover.image = url; }); window.App.rerender(); },
+        () => { Store.update((st) => { st.album.backCover.image = ''; }); window.App.rerender(); }),
     ]));
 
     grid.appendChild(settings);
@@ -1518,17 +1645,18 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
 
   function stickerListItem(st) {
     const card = window.Stickers.render(st, { showStats: true });
-    const overlay = el('div', { class: 'absolute inset-0 z-10 flex items-end justify-center gap-1 rounded-2xl bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 transition group-hover:opacity-100' }, [
-      el('button', { class: 'ghost-btn !h-8 !w-8', title: 'Editar', onclick: (e) => { e.stopPropagation(); openEdit(st); } }, '✏'),
-      el('button', { class: 'ghost-btn !h-8 !w-8 !text-rose-300', title: 'Excluir', onclick: (e) => { e.stopPropagation(); removeSticker(st.id); } }, '🗑'),
+    // Always-visible action buttons (mobile has no hover)
+    const actions = el('div', { class: 'absolute right-1 top-1 z-20 flex gap-1' }, [
+      el('button', { class: 'ghost-btn !h-8 !w-8 !bg-black/60', title: 'Editar', onclick: (e) => { e.stopPropagation(); openEdit(st); } }, '✏'),
+      el('button', { class: 'ghost-btn !h-8 !w-8 !bg-black/60 !text-rose-300', title: 'Excluir', onclick: (e) => { e.stopPropagation(); removeSticker(st.id); } }, '🗑'),
     ]);
-    return el('div', { class: 'group relative' }, [card, overlay]);
+    return el('div', { class: 'relative' }, [card, actions]);
   }
 
   /* Creator form state (transient draft) */
   let draft = newDraft();
   function newDraft() {
-    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal', design: null };
+    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal', shape: 'rect', bgColor: '', design: null };
   }
 
   function stickerCreator(editing) {
@@ -1538,8 +1666,8 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       clear(photoBox);
       if (d.photo) {
         photoBox.appendChild(el('div', { class: 'relative' }, [
-          el('img', { src: d.photo, class: 'h-40 w-full rounded-xl object-cover' }),
-          el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8', onclick: () => { d.photo = ''; renderPhotoBox(); livePreview(); } }, '×'),
+          el('img', { src: d.photo, class: 'h-40 w-full rounded-xl object-contain bg-black/30' }),
+          el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8 !bg-rose-500/80', title: 'Remover imagem', onclick: () => { d.photo = ''; renderPhotoBox(); livePreview(); } }, '×'),
         ]));
       } else {
         photoBox.appendChild(dropzone({
@@ -1547,6 +1675,17 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
           onImage: (url) => { d.photo = url; renderPhotoBox(); livePreview(); },
         }));
       }
+      // Model players gallery
+      photoBox.appendChild(el('p', { class: 'mb-1 mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400' }, 'Ou escolha um jogador modelo'));
+      photoBox.appendChild(el('div', { class: 'flex gap-2 overflow-x-auto pb-1' },
+        (window.Assets ? window.Assets.players : []).map((p) =>
+          el('button', {
+            class: 'flex-shrink-0 overflow-hidden rounded-lg border-2 transition ' + (d.photo === p.url ? 'border-fuchsia-400' : 'border-white/10 hover:border-white/40'),
+            title: p.name,
+            onclick: () => { d.photo = p.url; renderPhotoBox(); livePreview(); },
+          }, [el('img', { src: p.url, class: 'h-16 w-12 object-cover' })])
+        )
+      ));
     }
     renderPhotoBox();
 
@@ -1585,6 +1724,41 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     }
     renderArtBox();
 
+    /* Shape (formato livre) selector */
+    const SHAPES = [['rect', 'Retângulo', '▭'], ['shield', 'Escudo', '🛡️'], ['circle', 'Círculo', '⬤'], ['hex', 'Hexágono', '⬡']];
+    const shapeButtons = el('div', { class: 'grid grid-cols-4 gap-2' }, SHAPES.map(([key, label, icon]) =>
+      el('button', {
+        class: 'btn-secondary flex-col !px-1 !py-2 text-[11px] ' + (d.shape === key ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
+        onclick: () => {
+          d.shape = key;
+          Array.from(shapeButtons.children).forEach((b, i) => {
+            const on = SHAPES[i][0] === key;
+            b.classList.toggle('!border-fuchsia-400', on); b.classList.toggle('ring-2', on); b.classList.toggle('ring-fuchsia-400/40', on);
+          });
+          livePreview();
+        },
+      }, [el('div', { class: 'text-base' }, icon), el('div', {}, label)])
+    ));
+
+    /* Background color "wheel" + swatches */
+    const SWATCHES = ['#0f172a', '#1e293b', '#7c3aed', '#2563eb', '#db2777', '#e11d48', '#ea580c', '#16a34a', '#0891b2', '#facc15', '#f8fafc', '#000000'];
+    const GRADIENTS = [['#7c3aed', '#2563eb'], ['#db2777', '#f97316'], ['#06b6d4', '#3b82f6'], ['#16a34a', '#065f46'], ['#f59e0b', '#b45309'], ['#1e293b', '#000000']];
+    const colorWheel = el('input', { type: 'color', value: d.bgColor && d.bgColor.indexOf('|') < 0 ? d.bgColor : '#1e293b', class: 'h-10 w-14 flex-shrink-0 rounded-lg bg-transparent' });
+    colorWheel.addEventListener('input', (e) => { d.bgColor = e.target.value; livePreview(); });
+    const bgControls = el('div', { class: 'space-y-2' }, [
+      el('div', { class: 'flex items-center gap-2' }, [
+        colorWheel,
+        el('div', { class: 'flex flex-wrap gap-1.5' }, SWATCHES.map((c) =>
+          el('button', { class: 'h-7 w-7 rounded-md border border-white/20', style: `background:${c}`, title: c, onclick: () => { d.bgColor = c; livePreview(); } }))),
+      ]),
+      el('div', { class: 'flex flex-wrap items-center gap-1.5' }, [
+        el('span', { class: 'text-[11px] text-slate-400' }, 'Gradientes:'),
+        ...GRADIENTS.map(([a, b]) =>
+          el('button', { class: 'h-7 w-9 rounded-md border border-white/20', style: `background:linear-gradient(155deg,${a},${b})`, onclick: () => { d.bgColor = a + '|' + b; livePreview(); } })),
+        el('button', { class: 'ghost-btn !h-7 !w-7 text-xs', title: 'Remover fundo', onclick: () => { d.bgColor = ''; livePreview(); } }, '↺'),
+      ]),
+    ]);
+
     const rarityButtons = el('div', { class: 'grid grid-cols-3 gap-2' }, Object.keys(RARITIES).map((key) =>
       el('button', {
         class: 'btn-secondary !px-2 !py-2 text-xs ' + (d.type === key ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
@@ -1608,6 +1782,8 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       el('div', { class: 'mb-4' }, previewWrap),
 
       labeled('Tipo / Raridade', rarityButtons),
+      labeled('Formato da carta', shapeButtons),
+      labeled('Cor de fundo da figurinha', bgControls),
       artBox,
       el('div', { class: 'my-4 border-t border-white/10' }),
 

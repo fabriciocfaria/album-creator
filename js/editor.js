@@ -63,16 +63,16 @@
       labeled('Título da capa', input(s.album.cover.title, (v) => Store.update((st) => { st.album.cover.title = v; }))),
       labeled('Subtítulo', input(s.album.cover.subtitle, (v) => Store.update((st) => { st.album.cover.subtitle = v; }))),
       imageField('Imagem de fundo da capa', s.album.cover.image,
-        (url) => Store.update((st) => { st.album.cover.image = url; }),
-        () => Store.update((st) => { st.album.cover.image = ''; })),
+        (url) => { Store.update((st) => { st.album.cover.image = url; }); window.App.rerender(); },
+        () => { Store.update((st) => { st.album.cover.image = ''; }); window.App.rerender(); }),
     ]));
 
     // Back cover
     settings.appendChild(panel('Contracapa', [
       labeled('Texto da contracapa', textarea(s.album.backCover.text, (v) => Store.update((st) => { st.album.backCover.text = v; }))),
       imageField('Imagem de fundo da contracapa', s.album.backCover.image,
-        (url) => Store.update((st) => { st.album.backCover.image = url; }),
-        () => Store.update((st) => { st.album.backCover.image = ''; })),
+        (url) => { Store.update((st) => { st.album.backCover.image = url; }); window.App.rerender(); },
+        () => { Store.update((st) => { st.album.backCover.image = ''; }); window.App.rerender(); }),
     ]));
 
     grid.appendChild(settings);
@@ -318,17 +318,18 @@
 
   function stickerListItem(st) {
     const card = window.Stickers.render(st, { showStats: true });
-    const overlay = el('div', { class: 'absolute inset-0 z-10 flex items-end justify-center gap-1 rounded-2xl bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 transition group-hover:opacity-100' }, [
-      el('button', { class: 'ghost-btn !h-8 !w-8', title: 'Editar', onclick: (e) => { e.stopPropagation(); openEdit(st); } }, '✏'),
-      el('button', { class: 'ghost-btn !h-8 !w-8 !text-rose-300', title: 'Excluir', onclick: (e) => { e.stopPropagation(); removeSticker(st.id); } }, '🗑'),
+    // Always-visible action buttons (mobile has no hover)
+    const actions = el('div', { class: 'absolute right-1 top-1 z-20 flex gap-1' }, [
+      el('button', { class: 'ghost-btn !h-8 !w-8 !bg-black/60', title: 'Editar', onclick: (e) => { e.stopPropagation(); openEdit(st); } }, '✏'),
+      el('button', { class: 'ghost-btn !h-8 !w-8 !bg-black/60 !text-rose-300', title: 'Excluir', onclick: (e) => { e.stopPropagation(); removeSticker(st.id); } }, '🗑'),
     ]);
-    return el('div', { class: 'group relative' }, [card, overlay]);
+    return el('div', { class: 'relative' }, [card, actions]);
   }
 
   /* Creator form state (transient draft) */
   let draft = newDraft();
   function newDraft() {
-    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal', design: null };
+    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal', shape: 'rect', bgColor: '', design: null };
   }
 
   function stickerCreator(editing) {
@@ -338,8 +339,8 @@
       clear(photoBox);
       if (d.photo) {
         photoBox.appendChild(el('div', { class: 'relative' }, [
-          el('img', { src: d.photo, class: 'h-40 w-full rounded-xl object-cover' }),
-          el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8', onclick: () => { d.photo = ''; renderPhotoBox(); livePreview(); } }, '×'),
+          el('img', { src: d.photo, class: 'h-40 w-full rounded-xl object-contain bg-black/30' }),
+          el('button', { class: 'absolute right-2 top-2 ghost-btn !h-8 !w-8 !bg-rose-500/80', title: 'Remover imagem', onclick: () => { d.photo = ''; renderPhotoBox(); livePreview(); } }, '×'),
         ]));
       } else {
         photoBox.appendChild(dropzone({
@@ -347,6 +348,17 @@
           onImage: (url) => { d.photo = url; renderPhotoBox(); livePreview(); },
         }));
       }
+      // Model players gallery
+      photoBox.appendChild(el('p', { class: 'mb-1 mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400' }, 'Ou escolha um jogador modelo'));
+      photoBox.appendChild(el('div', { class: 'flex gap-2 overflow-x-auto pb-1' },
+        (window.Assets ? window.Assets.players : []).map((p) =>
+          el('button', {
+            class: 'flex-shrink-0 overflow-hidden rounded-lg border-2 transition ' + (d.photo === p.url ? 'border-fuchsia-400' : 'border-white/10 hover:border-white/40'),
+            title: p.name,
+            onclick: () => { d.photo = p.url; renderPhotoBox(); livePreview(); },
+          }, [el('img', { src: p.url, class: 'h-16 w-12 object-cover' })])
+        )
+      ));
     }
     renderPhotoBox();
 
@@ -385,6 +397,41 @@
     }
     renderArtBox();
 
+    /* Shape (formato livre) selector */
+    const SHAPES = [['rect', 'Retângulo', '▭'], ['shield', 'Escudo', '🛡️'], ['circle', 'Círculo', '⬤'], ['hex', 'Hexágono', '⬡']];
+    const shapeButtons = el('div', { class: 'grid grid-cols-4 gap-2' }, SHAPES.map(([key, label, icon]) =>
+      el('button', {
+        class: 'btn-secondary flex-col !px-1 !py-2 text-[11px] ' + (d.shape === key ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
+        onclick: () => {
+          d.shape = key;
+          Array.from(shapeButtons.children).forEach((b, i) => {
+            const on = SHAPES[i][0] === key;
+            b.classList.toggle('!border-fuchsia-400', on); b.classList.toggle('ring-2', on); b.classList.toggle('ring-fuchsia-400/40', on);
+          });
+          livePreview();
+        },
+      }, [el('div', { class: 'text-base' }, icon), el('div', {}, label)])
+    ));
+
+    /* Background color "wheel" + swatches */
+    const SWATCHES = ['#0f172a', '#1e293b', '#7c3aed', '#2563eb', '#db2777', '#e11d48', '#ea580c', '#16a34a', '#0891b2', '#facc15', '#f8fafc', '#000000'];
+    const GRADIENTS = [['#7c3aed', '#2563eb'], ['#db2777', '#f97316'], ['#06b6d4', '#3b82f6'], ['#16a34a', '#065f46'], ['#f59e0b', '#b45309'], ['#1e293b', '#000000']];
+    const colorWheel = el('input', { type: 'color', value: d.bgColor && d.bgColor.indexOf('|') < 0 ? d.bgColor : '#1e293b', class: 'h-10 w-14 flex-shrink-0 rounded-lg bg-transparent' });
+    colorWheel.addEventListener('input', (e) => { d.bgColor = e.target.value; livePreview(); });
+    const bgControls = el('div', { class: 'space-y-2' }, [
+      el('div', { class: 'flex items-center gap-2' }, [
+        colorWheel,
+        el('div', { class: 'flex flex-wrap gap-1.5' }, SWATCHES.map((c) =>
+          el('button', { class: 'h-7 w-7 rounded-md border border-white/20', style: `background:${c}`, title: c, onclick: () => { d.bgColor = c; livePreview(); } }))),
+      ]),
+      el('div', { class: 'flex flex-wrap items-center gap-1.5' }, [
+        el('span', { class: 'text-[11px] text-slate-400' }, 'Gradientes:'),
+        ...GRADIENTS.map(([a, b]) =>
+          el('button', { class: 'h-7 w-9 rounded-md border border-white/20', style: `background:linear-gradient(155deg,${a},${b})`, onclick: () => { d.bgColor = a + '|' + b; livePreview(); } })),
+        el('button', { class: 'ghost-btn !h-7 !w-7 text-xs', title: 'Remover fundo', onclick: () => { d.bgColor = ''; livePreview(); } }, '↺'),
+      ]),
+    ]);
+
     const rarityButtons = el('div', { class: 'grid grid-cols-3 gap-2' }, Object.keys(RARITIES).map((key) =>
       el('button', {
         class: 'btn-secondary !px-2 !py-2 text-xs ' + (d.type === key ? '!border-fuchsia-400 ring-2 ring-fuchsia-400/40' : ''),
@@ -408,6 +455,8 @@
       el('div', { class: 'mb-4' }, previewWrap),
 
       labeled('Tipo / Raridade', rarityButtons),
+      labeled('Formato da carta', shapeButtons),
+      labeled('Cor de fundo da figurinha', bgControls),
       artBox,
       el('div', { class: 'my-4 border-t border-white/10' }),
 
