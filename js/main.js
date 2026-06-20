@@ -73,7 +73,18 @@
     // rarity showcase using a few sample stickers (or real ones)
     const showcase = buildShowcase(s);
 
-    container.appendChild(el('div', { class: 'space-y-6' }, [hero, stats, features, showcase]));
+    // save / load album
+    const saveCard = el('div', { class: 'glass rounded-3xl p-6 view-in' }, [
+      el('h3', { class: 'mb-1 font-display text-xl font-bold' }, '💾 Salvar / Carregar álbum'),
+      el('p', { class: 'mb-4 text-sm text-slate-400' }, 'Seu álbum é salvo automaticamente neste navegador. Exporte um arquivo para guardar como backup ou abrir em outro dispositivo.'),
+      el('div', { class: 'flex flex-wrap gap-3' }, [
+        el('button', { class: 'btn-primary', onclick: saveAlbum }, '💾 Salvar agora'),
+        el('button', { class: 'btn-secondary', onclick: exportAlbum }, '⬇️ Exportar (.json)'),
+        el('button', { class: 'btn-secondary', onclick: importAlbum }, '⬆️ Importar (.json)'),
+      ]),
+    ]);
+
+    container.appendChild(el('div', { class: 'space-y-6' }, [hero, stats, features, showcase, saveCard]));
   }
 
   function statCard(icon, value, label) {
@@ -115,7 +126,44 @@
   /* ============================================================
      wiring
      ============================================================ */
-  function init() {
+  /* ---- save / export / import ---- */
+  function saveAlbum() {
+    Store.saveNow().then(() => {
+      if (Store.lastSaveError() === 'quota') toast('Sem espaço para salvar. Exporte o álbum (.json).', 'error');
+      else toast('Álbum salvo 💾', 'success');
+    });
+  }
+  function exportAlbum() {
+    const text = Store.exportJSON();
+    const name = (Store.get().album.title || 'meu-album').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.album.json';
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = el('a', { href: url, download: name });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Álbum exportado ⬇️', 'success');
+  }
+  function importAlbum() {
+    const input = el('input', { type: 'file', accept: '.json,application/json', class: 'hidden' });
+    document.body.appendChild(input);
+    input.addEventListener('change', () => {
+      const file = input.files[0]; input.remove();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          Store.importJSON(reader.result);
+          applyTheme(); updateNav(); rerender();
+          toast('Álbum importado ✅', 'success');
+        } catch (e) { toast('Arquivo inválido', 'error'); }
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  }
+
+  async function init() {
+    await Store.ready;                 // wait for IndexedDB load before first render
     applyTheme();
     updateNav();
     rerender();
@@ -125,14 +173,17 @@
     });
     document.getElementById('nav-logo').addEventListener('click', () => setMode('menu'));
 
-    document.getElementById('btn-save').addEventListener('click', () => { Store.save(); toast('Projeto salvo 💾', 'success'); });
+    document.getElementById('btn-save').addEventListener('click', saveAlbum);
     document.getElementById('btn-reset').addEventListener('click', () => {
       window.UI.confirm('Reiniciar TODO o projeto? Isso apaga álbum, figurinhas e progresso.', () => {
         Store.reset(); applyTheme(); updateNav(); rerender(); toast('Projeto reiniciado', 'info');
       }, { yes: 'Reiniciar' });
     });
+
+    // save before leaving (covers the debounce window)
+    window.addEventListener('beforeunload', () => { Store.saveNow(); });
   }
 
-  window.App = { rerender, setMode, applyTheme };
+  window.App = { rerender, setMode, applyTheme, saveAlbum, exportAlbum, importAlbum };
   document.addEventListener('DOMContentLoaded', init);
 })();

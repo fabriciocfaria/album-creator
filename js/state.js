@@ -52,22 +52,84 @@
     };
   }
 
-  let state = load() || defaultState();
+  let state = defaultState();
 
   const listeners = new Set();
   function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
   function notify() { listeners.forEach((fn) => fn(state)); }
 
-  function save() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* quota */ }
+  /* ============================================================
+     Persistence — IndexedDB (large quota) with localStorage fallback.
+     Images are base64 and quickly exceed localStorage's ~5MB limit,
+     which silently dropped saves and wiped data on reload.
+     ============================================================ */
+  const DB_NAME = 'album-creator-db';
+  const STORE_NAME = 'kv';
+  const KEY = 'state';
+
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      if (!('indexedDB' in window)) return reject(new Error('no-idb'));
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => { req.result.createObjectStore(STORE_NAME); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
   }
-  function load() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed;
-    } catch (e) { return null; }
+  function idbGet() {
+    return idbOpen().then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const r = tx.objectStore(STORE_NAME).get(KEY);
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    }));
+  }
+  function idbSet(value) {
+    return idbOpen().then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(value, KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    }));
+  }
+
+  let saveTimer = null;
+  let lastError = null;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { saveNow(); }, 200);
+  }
+  function saveNow() {
+    const snapshot = state;
+    return idbSet(snapshot)
+      .then(() => { lastError = null; })
+      .catch(() => {
+        // last-resort fallback (may fail on quota, but better than nothing)
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); lastError = null; }
+        catch (e) { lastError = 'quota'; }
+      });
+  }
+
+  /* async initial load — resolves Store.ready */
+  const ready = (async function loadInitial() {
+    let loaded = null;
+    try { loaded = await idbGet(); } catch (e) { /* idb unavailable */ }
+    if (!loaded) {
+      try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) loaded = JSON.parse(raw); } catch (e) { /* ignore */ }
+    }
+    if (loaded && typeof loaded === 'object') state = migrate(loaded);
+    return state;
+  })();
+
+  /* keep older saves compatible with newer fields */
+  function migrate(s) {
+    s.player = s.player || { coins: 200, owned: {}, placed: {}, packsOpened: 0 };
+    s.pack = s.pack || defaultState().pack;
+    s.stickers = s.stickers || [];
+    s.album = s.album || defaultState().album;
+    s.album.pages = s.album.pages || [makePage(6)];
+    if (s._seq == null) s._seq = (s.stickers.reduce((m, x) => Math.max(m, x.number || 0), 0) || 0) + 1;
+    return s;
   }
 
   /* Mutate helper: run fn, persist, notify */
@@ -84,6 +146,21 @@
   }
 
   function get() { return state; }
+
+  /* ---- export / import (save album to a file) ---- */
+  function exportJSON() {
+    return JSON.stringify({ _app: 'album-creator', _v: 1, exportedAt: new Date().toISOString(), state }, null, 2);
+  }
+  function importJSON(text) {
+    const parsed = JSON.parse(text);
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    if (!incoming || typeof incoming !== 'object' || !('album' in incoming)) throw new Error('Arquivo inválido');
+    state = migrate(incoming);
+    saveNow();
+    notify();
+    return state;
+  }
+  function lastSaveError() { return lastError; }
 
   /* ---- derived helpers ---- */
   function totalSlots() {
@@ -119,9 +196,10 @@
   }
 
   window.Store = {
-    STORAGE_KEY, RARITIES, THEMES,
+    STORAGE_KEY, RARITIES, THEMES, ready,
     uid, makeSlot, makePage,
-    get, update, reset, subscribe, save,
+    get, update, reset, subscribe, save, saveNow,
+    exportJSON, importJSON, lastSaveError,
     totalSlots, stickerById, ownedCount, placedCount, isPlaced, duplicates, completion,
   };
 })();

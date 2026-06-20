@@ -541,22 +541,84 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     };
   }
 
-  let state = load() || defaultState();
+  let state = defaultState();
 
   const listeners = new Set();
   function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
   function notify() { listeners.forEach((fn) => fn(state)); }
 
-  function save() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* quota */ }
+  /* ============================================================
+     Persistence — IndexedDB (large quota) with localStorage fallback.
+     Images are base64 and quickly exceed localStorage's ~5MB limit,
+     which silently dropped saves and wiped data on reload.
+     ============================================================ */
+  const DB_NAME = 'album-creator-db';
+  const STORE_NAME = 'kv';
+  const KEY = 'state';
+
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      if (!('indexedDB' in window)) return reject(new Error('no-idb'));
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => { req.result.createObjectStore(STORE_NAME); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
   }
-  function load() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed;
-    } catch (e) { return null; }
+  function idbGet() {
+    return idbOpen().then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const r = tx.objectStore(STORE_NAME).get(KEY);
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    }));
+  }
+  function idbSet(value) {
+    return idbOpen().then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(value, KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    }));
+  }
+
+  let saveTimer = null;
+  let lastError = null;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { saveNow(); }, 200);
+  }
+  function saveNow() {
+    const snapshot = state;
+    return idbSet(snapshot)
+      .then(() => { lastError = null; })
+      .catch(() => {
+        // last-resort fallback (may fail on quota, but better than nothing)
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); lastError = null; }
+        catch (e) { lastError = 'quota'; }
+      });
+  }
+
+  /* async initial load — resolves Store.ready */
+  const ready = (async function loadInitial() {
+    let loaded = null;
+    try { loaded = await idbGet(); } catch (e) { /* idb unavailable */ }
+    if (!loaded) {
+      try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) loaded = JSON.parse(raw); } catch (e) { /* ignore */ }
+    }
+    if (loaded && typeof loaded === 'object') state = migrate(loaded);
+    return state;
+  })();
+
+  /* keep older saves compatible with newer fields */
+  function migrate(s) {
+    s.player = s.player || { coins: 200, owned: {}, placed: {}, packsOpened: 0 };
+    s.pack = s.pack || defaultState().pack;
+    s.stickers = s.stickers || [];
+    s.album = s.album || defaultState().album;
+    s.album.pages = s.album.pages || [makePage(6)];
+    if (s._seq == null) s._seq = (s.stickers.reduce((m, x) => Math.max(m, x.number || 0), 0) || 0) + 1;
+    return s;
   }
 
   /* Mutate helper: run fn, persist, notify */
@@ -573,6 +635,21 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   }
 
   function get() { return state; }
+
+  /* ---- export / import (save album to a file) ---- */
+  function exportJSON() {
+    return JSON.stringify({ _app: 'album-creator', _v: 1, exportedAt: new Date().toISOString(), state }, null, 2);
+  }
+  function importJSON(text) {
+    const parsed = JSON.parse(text);
+    const incoming = parsed && parsed.state ? parsed.state : parsed;
+    if (!incoming || typeof incoming !== 'object' || !('album' in incoming)) throw new Error('Arquivo inválido');
+    state = migrate(incoming);
+    saveNow();
+    notify();
+    return state;
+  }
+  function lastSaveError() { return lastError; }
 
   /* ---- derived helpers ---- */
   function totalSlots() {
@@ -608,9 +685,10 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   }
 
   window.Store = {
-    STORAGE_KEY, RARITIES, THEMES,
+    STORAGE_KEY, RARITIES, THEMES, ready,
     uid, makeSlot, makePage,
-    get, update, reset, subscribe, save,
+    get, update, reset, subscribe, save, saveNow,
+    exportJSON, importJSON, lastSaveError,
     totalSlots, stickerById, ownedCount, placedCount, isPlaced, duplicates, completion,
   };
 })();
@@ -694,12 +772,35 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     return m;
   }
 
-  /* ---- file → dataURL ---- */
-  function readImage(file) {
+  /* ---- file → dataURL, downscaled & compressed to keep storage small ---- */
+  function readImage(file, opts) {
+    opts = opts || {};
+    const maxDim = opts.maxDim || 800;
+    const quality = opts.quality || 0.82;
     return new Promise((resolve, reject) => {
       if (!file || !file.type.startsWith('image/')) return reject(new Error('Arquivo inválido'));
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
+      reader.onload = () => {
+        const raw = reader.result;
+        // SVG/GIF: keep as-is (canvas would rasterize/lose animation); they are small anyway
+        if (file.type === 'image/svg+xml' || file.type === 'image/gif') return resolve(raw);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            let w = img.width, h = img.height;
+            const scale = Math.min(1, maxDim / Math.max(w, h));
+            w = Math.max(1, Math.round(w * scale));
+            h = Math.max(1, Math.round(h * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } catch (e) { resolve(raw); }
+        };
+        img.onerror = () => resolve(raw);
+        img.src = raw;
+      };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
@@ -2437,7 +2538,18 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     // rarity showcase using a few sample stickers (or real ones)
     const showcase = buildShowcase(s);
 
-    container.appendChild(el('div', { class: 'space-y-6' }, [hero, stats, features, showcase]));
+    // save / load album
+    const saveCard = el('div', { class: 'glass rounded-3xl p-6 view-in' }, [
+      el('h3', { class: 'mb-1 font-display text-xl font-bold' }, '💾 Salvar / Carregar álbum'),
+      el('p', { class: 'mb-4 text-sm text-slate-400' }, 'Seu álbum é salvo automaticamente neste navegador. Exporte um arquivo para guardar como backup ou abrir em outro dispositivo.'),
+      el('div', { class: 'flex flex-wrap gap-3' }, [
+        el('button', { class: 'btn-primary', onclick: saveAlbum }, '💾 Salvar agora'),
+        el('button', { class: 'btn-secondary', onclick: exportAlbum }, '⬇️ Exportar (.json)'),
+        el('button', { class: 'btn-secondary', onclick: importAlbum }, '⬆️ Importar (.json)'),
+      ]),
+    ]);
+
+    container.appendChild(el('div', { class: 'space-y-6' }, [hero, stats, features, showcase, saveCard]));
   }
 
   function statCard(icon, value, label) {
@@ -2479,7 +2591,44 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
   /* ============================================================
      wiring
      ============================================================ */
-  function init() {
+  /* ---- save / export / import ---- */
+  function saveAlbum() {
+    Store.saveNow().then(() => {
+      if (Store.lastSaveError() === 'quota') toast('Sem espaço para salvar. Exporte o álbum (.json).', 'error');
+      else toast('Álbum salvo 💾', 'success');
+    });
+  }
+  function exportAlbum() {
+    const text = Store.exportJSON();
+    const name = (Store.get().album.title || 'meu-album').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.album.json';
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = el('a', { href: url, download: name });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Álbum exportado ⬇️', 'success');
+  }
+  function importAlbum() {
+    const input = el('input', { type: 'file', accept: '.json,application/json', class: 'hidden' });
+    document.body.appendChild(input);
+    input.addEventListener('change', () => {
+      const file = input.files[0]; input.remove();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          Store.importJSON(reader.result);
+          applyTheme(); updateNav(); rerender();
+          toast('Álbum importado ✅', 'success');
+        } catch (e) { toast('Arquivo inválido', 'error'); }
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  }
+
+  async function init() {
+    await Store.ready;                 // wait for IndexedDB load before first render
     applyTheme();
     updateNav();
     rerender();
@@ -2489,15 +2638,18 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     });
     document.getElementById('nav-logo').addEventListener('click', () => setMode('menu'));
 
-    document.getElementById('btn-save').addEventListener('click', () => { Store.save(); toast('Projeto salvo 💾', 'success'); });
+    document.getElementById('btn-save').addEventListener('click', saveAlbum);
     document.getElementById('btn-reset').addEventListener('click', () => {
       window.UI.confirm('Reiniciar TODO o projeto? Isso apaga álbum, figurinhas e progresso.', () => {
         Store.reset(); applyTheme(); updateNav(); rerender(); toast('Projeto reiniciado', 'info');
       }, { yes: 'Reiniciar' });
     });
+
+    // save before leaving (covers the debounce window)
+    window.addEventListener('beforeunload', () => { Store.saveNow(); });
   }
 
-  window.App = { rerender, setMode, applyTheme };
+  window.App = { rerender, setMode, applyTheme, saveAlbum, exportAlbum, importAlbum };
   document.addEventListener('DOMContentLoaded', init);
 })();
 

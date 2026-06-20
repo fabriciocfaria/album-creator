@@ -75,12 +75,35 @@
     return m;
   }
 
-  /* ---- file → dataURL ---- */
-  function readImage(file) {
+  /* ---- file → dataURL, downscaled & compressed to keep storage small ---- */
+  function readImage(file, opts) {
+    opts = opts || {};
+    const maxDim = opts.maxDim || 800;
+    const quality = opts.quality || 0.82;
     return new Promise((resolve, reject) => {
       if (!file || !file.type.startsWith('image/')) return reject(new Error('Arquivo inválido'));
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
+      reader.onload = () => {
+        const raw = reader.result;
+        // SVG/GIF: keep as-is (canvas would rasterize/lose animation); they are small anyway
+        if (file.type === 'image/svg+xml' || file.type === 'image/gif') return resolve(raw);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            let w = img.width, h = img.height;
+            const scale = Math.min(1, maxDim / Math.max(w, h));
+            w = Math.max(1, Math.round(w * scale));
+            h = Math.max(1, Math.round(h * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } catch (e) { resolve(raw); }
+        };
+        img.onerror = () => resolve(raw);
+        img.src = raw;
+      };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
