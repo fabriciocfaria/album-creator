@@ -171,7 +171,7 @@
       const node = window.Stickers.render(sticker, { showStats: false });
       const wrap = el('div', { class: 'relative h-full w-full' }, [node,
         el('button', { class: 'absolute -right-1 -top-1 z-20 grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-xs',
-          onclick: (e) => { e.stopPropagation(); Store.update((st) => { const sl = findSlot(st, elm.slotId); if (sl) sl.stickerId = null; }); } }, '×'),
+          onclick: (e) => { e.stopPropagation(); Store.update((st) => { const sl = findSlot(st, elm.slotId); if (sl) sl.stickerId = null; }); window.App.rerender(); } }, '×'),
       ]);
       return wrap;
     }
@@ -233,9 +233,7 @@
         el('button', {
           class: 'absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-rose-500 text-xs',
           title: 'Desvincular',
-          onclick: () => Store.update((st) => {
-            const sl = findSlot(st, slot.id); if (sl) sl.stickerId = null;
-          }),
+          onclick: () => { Store.update((st) => { const sl = findSlot(st, slot.id); if (sl) sl.stickerId = null; }); window.App.rerender(); },
         }, '×'),
       ]);
     }
@@ -266,6 +264,8 @@
       w.addEventListener('click', () => {
         Store.update((state) => { const sl = findSlot(state, slotId); if (sl) sl.stickerId = st.id; });
         m.close();
+        toast('Figurinha vinculada ao slot ✓', 'success');
+        window.App.rerender();
       });
       list.appendChild(w);
     });
