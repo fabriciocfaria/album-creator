@@ -1168,6 +1168,7 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
     // deep clone so cancel discards changes
     const design = JSON.parse(JSON.stringify(config.design || blankDesign()));
     let selectedId = null;
+    let clipboard = null;
 
     const overlay = el('div', { class: 'cv-overlay' });
 
@@ -1190,6 +1191,7 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       addBtn('▭', 'Forma', () => shapePicker()),
       addBtn('🖼️', 'Imagem', () => addImage()),
       config.allowSlots ? addBtn('🃏', 'Slot', () => addSlot()) : null,
+      addBtn('📋', 'Colar', () => paste()),
     ]);
 
     /* --- canvas stage --- */
@@ -1299,6 +1301,25 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
       design.els.splice(i, 1); design.els.splice(j, 0, elm); rebuild(selectedId);
     }
 
+    /* copy / paste elements (keeps the same size — handy for uniform slots) */
+    function copyEl(elm) { clipboard = JSON.parse(JSON.stringify(elm)); delete clipboard.id; delete clipboard.slotId; toast('Elemento copiado — toque em 📋 Colar', 'info'); }
+    function paste() {
+      if (!clipboard) { toast('Nada copiado ainda. Selecione um elemento e toque em 📄 Copiar.', 'info'); return; }
+      const c = JSON.parse(JSON.stringify(clipboard));
+      c.id = uid();
+      if (c.type === 'slot') c.slotId = Store.uid('slot');
+      c.x = clamp((c.x || 10) + 5, 0, 92);
+      c.y = clamp((c.y || 10) + 5, 0, 92);
+      addEl(c);
+    }
+    /* make every slot the same size as the given one */
+    function equalizeSlots(elm) {
+      const n = design.els.filter((e) => e.type === 'slot').length;
+      design.els.forEach((e) => { if (e.type === 'slot') { e.w = elm.w; e.h = elm.h; } });
+      rebuild(selectedId);
+      toast(`${n} slots com o mesmo tamanho ✓`, 'success');
+    }
+
     function addText() { addEl({ id: uid(), type: 'text', x: 25, y: 40, w: 50, h: 14, rot: 0, text: 'Seu texto', color: '#ffffff', font: FONTS[0].v, weight: '700', size: 8, align: 'center', shadow: true }); }
     function addSlot() { addEl({ id: uid(), type: 'slot', x: 38, y: 36, w: 24, h: 28, rot: 0, slotId: Store.uid('slot') }); }
     function addShapeKind(kind) { addEl({ id: uid(), type: 'shape', shape: kind, x: 35, y: 35, w: 30, h: 30, rot: 0, fill: '#f472b6', fillOpacity: 1, radius: 14, thickness: 8 }); }
@@ -1366,6 +1387,7 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
         el('div', { class: 'flex gap-1' }, [
           iconBtn('⬇️', 'Para trás', () => layer(elm, -1)),
           iconBtn('⬆️', 'Para frente', () => layer(elm, 1)),
+          iconBtn('📄', 'Copiar', () => copyEl(elm)),
           iconBtn('⧉', 'Duplicar', () => duplicateEl(elm)),
           iconBtn('🗑', 'Excluir', () => removeEl(elm.id)),
         ]),
@@ -1391,7 +1413,8 @@ body[data-theme="vintage"] .field { background: rgba(28,19,11,.55); border-color
         ctrls.appendChild(wrap2('Cantos', range(elm.radius, 0, 50, (v) => { elm.radius = v; renderStage(); })));
         ctrls.appendChild(field('Formato', selectIn([['0', 'Quadrado'], ['1', 'Círculo']], elm.circle ? '1' : '0', (v) => { elm.circle = v === '1'; renderStage(); })));
       } else if (elm.type === 'slot') {
-        ctrls.appendChild(el('p', { class: 'col-span-2 text-xs text-slate-400' }, 'Espaço onde a figurinha será colada no Modo Jogador.'));
+        ctrls.appendChild(el('button', { class: 'btn-secondary col-span-2 !py-2 text-sm', onclick: () => equalizeSlots(elm) }, '↔ Igualar tamanho de todos os slots'));
+        ctrls.appendChild(el('p', { class: 'col-span-2 text-xs text-slate-400' }, 'Dica: ajuste este slot, toque em “Igualar” para todos ficarem iguais — ou use 📄 Copiar e 📋 Colar para criar slots idênticos.'));
       }
       // common: rotation + opacity
       ctrls.appendChild(wrap2('Rotação', range(elm.rot || 0, -180, 180, (v) => { elm.rot = v; renderStage(); })));
