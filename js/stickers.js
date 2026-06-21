@@ -43,9 +43,13 @@
     // Rarity badge
     layers.push(el('div', { class: 'sticker__badge' }, rar.badge));
 
-    // Name + team
+    // Name + team (+ country flag)
     layers.push(el('div', { class: 'sticker__name' }, sticker.name || 'Sem nome'));
-    if (sticker.team) layers.push(el('div', { class: 'sticker__team' }, sticker.team));
+    const flag = sticker.country && window.Countries ? window.Countries.flag(sticker.country) : '';
+    if (sticker.team || flag) {
+      const teamText = sticker.team || (window.Countries ? window.Countries.name(sticker.country) : '');
+      layers.push(el('div', { class: 'sticker__team' }, (flag ? flag + ' ' : '') + teamText));
+    }
 
     // Stats
     if (opts.showStats !== false && (sticker.height || sticker.weight || sticker.dob)) {
@@ -81,6 +85,7 @@
     if (sticker.type === 'legend') { layers.push(el('div', { class: 'sticker__holo' })); layers.push(el('div', { class: 'sticker__crown' }, '👑')); }
     if (sticker.number != null) layers.push(el('div', { class: 'sticker__num' }, '#' + sticker.number));
     layers.push(el('div', { class: 'sticker__badge' }, rar.badge));
+    if (sticker.country && window.Countries) layers.push(el('div', { class: 'sticker__team' }, window.Countries.flag(sticker.country)));
     return el('div', { class: cardClass(sticker) }, layers);
   }
 
@@ -96,6 +101,7 @@
     window.UI.bindHolo(wrap);
     const info = el('div', { class: 'mt-4 space-y-1 text-sm text-slate-300' }, [
       sticker.team ? row('Time', sticker.team) : null,
+      sticker.country && window.Countries ? row('País', window.Countries.label(sticker.country)) : null,
       sticker.dob ? row('Nascimento', formatDate(sticker.dob)) : null,
       sticker.height ? row('Altura', sticker.height) : null,
       sticker.weight ? row('Peso', sticker.weight) : null,

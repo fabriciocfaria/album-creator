@@ -391,7 +391,7 @@
   /* Creator form state (transient draft) */
   let draft = newDraft();
   function newDraft() {
-    return { name: '', dob: '', weight: '', height: '', team: '', photo: '', type: 'normal', shape: 'rect', bgColor: '', design: null };
+    return { name: '', dob: '', weight: '', height: '', team: '', country: '', photo: '', type: 'normal', shape: 'rect', bgColor: '', design: null };
   }
 
   function stickerCreator(editing) {
@@ -538,6 +538,7 @@
         labeled('Peso', input(d.weight, bindLive('weight'), 'Ex: 68 kg')),
         labeled('Altura', input(d.height, bindLive('height'), 'Ex: 1,75 m')),
       ]),
+      labeled('País', countrySelect(d, bindLive)),
     ];
 
     if (editing) {
@@ -748,6 +749,17 @@
     const node = el('input', { class: 'field', value: value || '', placeholder: placeholder || '', type: type || 'text' });
     node.addEventListener('input', (e) => onChange(e.target.value));
     return node;
+  }
+  function countrySelect(d, bindLive) {
+    const sel = el('select', { class: 'field' });
+    sel.appendChild(el('option', { value: '' }, '🌍 Selecione o país'));
+    (window.Countries ? window.Countries.LIST : []).forEach(([code, nm]) => {
+      const o = el('option', { value: code }, window.Countries.flag(code) + ' ' + nm);
+      if (d.country === code) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', (e) => bindLive('country')(e.target.value));
+    return sel;
   }
   function textarea(value, onChange) {
     const node = el('textarea', { class: 'field', rows: '3' });
